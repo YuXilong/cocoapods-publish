@@ -4,10 +4,13 @@ source 'https://rubygems.org'
 gemspec
 
 group :development do
-  gem 'cocoapods'
+  gem 'cocoapods', '~> 1.11.3'
 
   gem 'mocha'
   gem 'bacon'
   gem 'mocha-on-bacon'
   gem 'prettybacon'
+
+  gem 'colorize'
+
 end

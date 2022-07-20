@@ -1,1 +1,1 @@
-require 'cocoapods-publish/command'
+require 'pod/command.rb'

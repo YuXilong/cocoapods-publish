@@ -1,2 +1,2 @@
-require 'pod/command/publish'
-require 'cocoapods-publish/pod_utils'
+require 'pod/gem_version'
+# require 'cocoapods-publish/pod_utils'

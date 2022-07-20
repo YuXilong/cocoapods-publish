@@ -1,1 +1,1 @@
-require 'command/publish'
+require 'pod/command/publish'

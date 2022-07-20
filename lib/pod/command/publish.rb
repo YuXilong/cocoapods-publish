@@ -1,3 +1,5 @@
+require 'colorize'
+
 module Pod
   class Command
     # This is an example of a cocoapods plugin adding a top-level subcommand
@@ -39,12 +41,15 @@ module Pod
       def run
         # UI.puts "Add your implementation for the cocoapods-publish plugin in #{__FILE__}"
 
-        command = "git status"
+        puts "校验pod..."
+        command = "pod lib lint BTNetwork.podspec"
         output = `#{command}`.lines.to_a
-        UI.puts "#{$?.exitstatus}"
-
-
-
+        if $?.exitstatus != 0
+          # UI.puts(output.join(''))
+          # puts UI::BuildFailedReport.report(command, output)
+          puts "pod 校验不通过！"
+          Process.exit
+        end
 
       end
     end
