@@ -37,7 +37,15 @@ module Pod
       end
 
       def run
-        UI.puts "Add your implementation for the cocoapods-publish plugin in #{__FILE__}"
+        # UI.puts "Add your implementation for the cocoapods-publish plugin in #{__FILE__}"
+
+        command = "git status"
+        output = `#{command}`.lines.to_a
+        UI.puts "#{$?.exitstatus}"
+
+
+
+
       end
     end
   end
