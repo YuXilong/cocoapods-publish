@@ -1,2 +1,5 @@
-require 'pod/gem_version'
-# require 'cocoapods-publish/pod_utils'
+module Pod
+  module Publish
+    VERSION = '1.0.0'.freeze
+  end
+end

@@ -1,0 +1,101 @@
+{
+  "name": "BTNetwork",
+  "version": "100",
+  "summary": "网络模块.",
+  "description": "提供网络请求相关服务.",
+  "homepage": "https://gitlab.v.show/ios_component/btnetwork",
+  "license": {
+    "type": "MIT",
+    "file": "LICENSE"
+  },
+  "authors": {
+    "yuxilong": "305758560@qq.com"
+  },
+  "source": {
+    "git": "https://gitlab.v.show/ios_component/btnetwork.git",
+    "tag": "100"
+  },
+  "platforms": {
+    "ios": "10.0"
+  },
+  "source_files": "BTNetwork/BTNetwork.h",
+  "default_subspecs": "Core",
+  "dependencies": {
+    "AFNetworking": [
+      "~> 4.0.1"
+    ],
+    "BTBaseKit": [
+
+    ],
+    "BTCrypto_Framework": [
+
+    ],
+    "BTLogger": [
+
+    ]
+  },
+  "pod_target_xcconfig": {
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64",
+    "VALID_ARCHS": "arm64 x86_64",
+    "ENABLE_BITCODE": "NO"
+  },
+  "user_target_xcconfig": {
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "arm64",
+    "VALID_ARCHS": "arm64 x86_64",
+    "ENABLE_BITCODE": "NO"
+  },
+  "subspecs": [
+    {
+      "name": "Core",
+      "source_files": "BTNetwork/Core/*.{h,m}",
+      "dependencies": {
+        "BTNetwork/Error": [
+
+        ],
+        "BTNetwork/Configuration": [
+
+        ],
+        "BTNetwork/Log": [
+
+        ],
+        "BTNetwork/ShuMei": [
+
+        ]
+      }
+    },
+    {
+      "name": "Error",
+      "source_files": "BTNetwork/Error/*.{h,m}"
+    },
+    {
+      "name": "Log",
+      "source_files": "BTNetwork/Log/*.{h,m}"
+    },
+    {
+      "name": "Configuration",
+      "source_files": "BTNetwork/Configuration/**/*.{h,m}",
+      "dependencies": {
+        "BTNetwork/Plugins": [
+
+        ],
+        "BTNetwork/ShuMei": [
+
+        ]
+      }
+    },
+    {
+      "name": "Plugins",
+      "source_files": "BTNetwork/Plugins/*.h",
+      "dependencies": {
+        "BTNetwork/Error": [
+
+        ]
+      }
+    },
+    {
+      "name": "ShuMei",
+      "source_files": "BTNetwork/ShuMeiSDK/**/*.h",
+      "vendored_libraries": "BTNetwork/ShuMeiSDK/libSmAntiFraud.a"
+    }
+  ]
+}
