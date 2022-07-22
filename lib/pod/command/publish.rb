@@ -134,6 +134,7 @@ module Pod
           command.run
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green
+          config.silent = true
         rescue Exception => e
           restore_old_version_to_podspec
           config.silent = false
