@@ -1,6 +1,6 @@
 # cocoapods-publish
 
-A description of cocoapods-publish.
+自动发布组件到私有组件仓库
 
 ## Installation
 
@@ -8,4 +8,4 @@ A description of cocoapods-publish.
 
 ## Usage
 
-    $ pod spec publish POD_NAME
+    $ pod publish REPO_NAME POD_SPEC_FILE

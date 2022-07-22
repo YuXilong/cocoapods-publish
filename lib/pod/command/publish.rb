@@ -7,104 +7,140 @@ module Pod
         CLAide::Argument.new('NAME', true)
       ]
 
+      def self.options
+        [
+          %w[--swift_version 指定Swift版本.],
+          %w[--skip_import_validation 跳过import_validation验证.],
+          %w[--sources 指定依赖的组件仓库.]
+        ]
+      end
+
       def initialize(argv)
+        @source = argv.shift_argument
         @name = argv.shift_argument
-        @source = ''
+        @swift_version = argv.flag?('swift_version', 5.0)
+        @skip_import_validation = argv.flag?('skip_import_validation', false)
+        @sources = argv.flag?('sources', %w[trunk BaiTuPods BaiTuFrameworkPods])
+        @spec = spec_with_path(@name)
         super
       end
 
       def validate!
         super
-        help! 'A Pod name is required.' unless @name
+        help! '需要指定发布的组件.' unless @spec
+        help! '需要指定发布组件的source.' unless @source
       end
 
       def run
-        # UI.puts "Add your implementation for the cocoapods-publish plugin in #{__FILE__}"
-        # validate_podspec
-        @spec ||= Pod::Specification.from_file('/Users/yuxilong/Desktop/code/BaiTuPods/BTBaseKit/BTBaseKit.podspec')
-        version = @spec.attributes_hash['version']
-        version = '1.0.2'
-        @spec.attributes_hash['version'] = version
-        puts @spec
+        @project_path = Pathname(@name).parent.to_s
+        validate_podspec
+        increase_version_number
+        save_new_version_to_podspec
+        check_repo_status
+        push_pods
       end
 
-      def validate_pod
+      # 验证.podspec 执行 pod lib lint xxx.podspec
+      def validate_podspec
         UI.puts "-> 验证#{@name}...".yellow
+        Lib::Create
+        config.silent = true
+        validator = Validator.new(@spec, @sources)
+        validator.allow_warnings = true
+        validator.use_frameworks = false
+        validator.use_modular_headers = true if validator.respond_to?(:use_modular_headers=)
+        validator.swift_version = @swift_version if validator.respond_to?(:swift_version=)
+        validator.skip_import_validation = @skip_import_validation
+        validator.skip_tests = true
+        validator.validate
 
-        argv = CLAide::ARGV.coerce([@name, '--allow-warnings', '--verbose', '--sources=trunk,BaiTuPods,BaiTuFrameworkPods'])
-        command = Lib::Lint.new(argv)
-        output = command.run
-        # lint = Lib::Lint.new(argv)
-        # command = "pod lib lint #{@name} --allow-warnings --verbose --sources=trunk,BaiTuPods,BaiTuFrameworkPods"
-        # # output = `#{command}`.lines.to_a
-        # output = lint.run
-        if $?.exitstatus != 0
-          puts output.join('')
-          UI.puts "-> #{@name} 验证未通过！Command: #{command}".red
+        config.silent = false
+        unless validator.validated?
+          UI.puts "-> #{@name} 验证未通过！Command：pod lib lint #{@name} --allow-warnings --sources=#{@sources.join(',')}".red
           Process.exit
         end
         UI.puts "-> #{@name} 验证通过！".green
       end
 
-      def spec
-        @spec ||= Pod::Specification.from_file('/Users/yuxilong/Desktop/code/BaiTuPods/BTBaseKit/BTBaseKit.podspec')
-      rescue Informative => e # TODO: this should be a more specific error
-        raise Informative, 'Unable to interpret the specified path ' \
-                             "#{UI.path(@name)} as a podspec (#{e})."
+      # 增加版本号
+      def increase_version_number
+        @old_version = @spec.attributes_hash['version']
+        @new_version = increase_number(@old_version)
+        @spec.attributes_hash['version'] = @new_version
       end
 
-      def validate_podspec
-        UI.puts 'Validating podspec'.yellow
-
-        # validator = Validator.new(spec, [])
-        # validator.allow_warnings = true
-        # validator.use_frameworks = false
-        # validator.use_modular_headers = true if validator.respond_to?(:use_modular_headers=)
-        # # if validator.respond_to?(:swift_version=)
-        # #   validator.swift_version = @swift_version
-        # # end
-        # validator.skip_import_validation = false
-        # validator.skip_tests = false
-        # validator.validate
-        # unless validator.validated?
-        #   raise Informative, "The spec did not pass validation, due to #{validator.failure_reason}."
-        # end
-        #
-        # @swift_version = validator.respond_to?(:used_swift_version) && validator.used_swift_version
+      # 自增版本号
+      def increase_number(number)
+        numbers = number.split('.')
+        count = numbers.length
+        case count
+        when 1 then (number.to_i + 1).to_s
+        else (numbers.join('').to_i + 1).to_s.split('').join('.')
+        end
       end
 
+      # 保存新版本
+      def save_new_version_to_podspec
+        text = File.read(@name)
+        text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{@new_version}'")
+        File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      # 恢复旧版本
+      def restore_old_version_to_podspec
+        text = File.read(@name)
+        text.gsub!("s.version          = '#{@new_version}'", "s.version          = '#{@old_version}'")
+        File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      # 检查当前仓库状态
+      def check_repo_status
+        create_tag if check_tag
+      end
+
+      def check_tag
+        output = `cd #{@project_path} && git tag -l #{@new_version}`.lines.to_a
+        output.empty?
+      end
+
+      # 创建tag
+      def create_tag
+        UI.puts '-> 创建新版本...'.yellow
+
+        command = "cd #{@project_path}"
+        command << ' && git add .'
+        command << " && git commit -m \"[Update] (#{@new_version})\""
+        command << " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
+        command << ' && git push origin main --tags'
+
+        output = `#{command}`
+        if $?.exitstatus != 0
+          UI.puts "-> #{output}".red
+          UI.puts "-> 创建新版本失败！Command： #{command}".red
+          restore_old_version_to_podspec
+          Process.exit
+        end
+        UI.puts "-> 新版本(#{@new_version})创建成功！".green
+      end
+
+      # 推送新版本到私有库
+      def push_pods
+        UI.puts "-> 发布新版本(#{@new_version})...".yellow
+        config.silent = true
+        argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
+        begin
+          command = Repo::Push.new(argv)
+          command.run
+          config.silent = false
+          UI.puts "-> (#{@new_version})发布成功！".green
+        rescue Exception => e
+          restore_old_version_to_podspec
+          config.silent = false
+          UI.puts "-> #{e.to_s}".red
+          UI.puts "-> (#{@new_version})发布失败！".red
+          Process.exit
+        end
+      end
     end
   end
-
-  class String
-    # colorization
-    def colorize(color_code)
-      "\e[#{color_code}m#{self}\e[0m"
-    end
-
-    def red
-      colorize(31)
-    end
-
-    def green
-      colorize(32)
-    end
-
-    def yellow
-      colorize(33)
-    end
-
-    def blue
-      colorize(34)
-    end
-
-    def pink
-      colorize(35)
-    end
-
-    def light_blue
-      colorize(36)
-    end
-  end
-
 end
