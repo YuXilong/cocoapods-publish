@@ -18,7 +18,7 @@ module Pod
       def initialize(argv)
         @source = argv.shift_argument
         @name = argv.shift_argument
-        @swift_version = argv.flag?('swift_version', 5.0)
+        @swift_version = argv.flag?('swift_version', nil)
         @skip_import_validation = argv.flag?('skip_import_validation', false)
         @sources = argv.flag?('sources', %w[trunk BaiTuPods BaiTuFrameworkPods])
         @spec = spec_with_path(@name)
@@ -43,12 +43,13 @@ module Pod
       # 验证.podspec 执行 pod lib lint xxx.podspec
       def validate_podspec
         UI.puts "-> 验证#{@name}...".yellow
-        Lib::Create
         config.silent = true
         validator = Validator.new(@spec, @sources)
+        validator.local = true
+        validator.no_clean = false
         validator.allow_warnings = true
-        validator.use_frameworks = false
-        validator.use_modular_headers = true if validator.respond_to?(:use_modular_headers=)
+        validator.use_frameworks = true
+        # validator.use_modular_headers = true if validator.respond_to?(:use_modular_headers=)
         validator.swift_version = @swift_version if validator.respond_to?(:swift_version=)
         validator.skip_import_validation = @skip_import_validation
         validator.skip_tests = true
@@ -113,7 +114,7 @@ module Pod
         command << " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
         command << ' && git push origin main --tags'
 
-        output = `#{command}`
+        output = `#{command}`.lines
         if $?.exitstatus != 0
           UI.puts "-> #{output}".red
           UI.puts "-> 创建新版本失败！Command： #{command}".red
