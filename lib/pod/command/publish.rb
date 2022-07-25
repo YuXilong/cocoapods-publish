@@ -114,7 +114,10 @@ module Pod
         command << " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
         command << ' && git push origin main --tags'
 
+        config.silent = true
         output = `#{command}`.lines
+        UI.puts
+        config.silent = false
         if $?.exitstatus != 0
           UI.puts "-> #{output}".red
           UI.puts "-> 创建新版本失败！Command： #{command}".red
@@ -130,7 +133,7 @@ module Pod
         config.silent = true
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
-          command = Repo::Push.new(argv)
+          command = Repo::Push::PushWithoutValid.new(argv)
           command.run
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green
