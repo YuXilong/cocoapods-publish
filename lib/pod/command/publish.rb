@@ -137,6 +137,8 @@ module Pod
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
+          command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
+          command.run
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green
           config.silent = true
