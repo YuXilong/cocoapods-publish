@@ -9,8 +9,9 @@ module Pod
 
       def self.options
         [
-          %w[--swift_version 指定Swift版本.],
-          %w[--skip_import_validation 跳过import_validation验证.],
+          %w[--swift-version 指定Swift版本.],
+          %w[--skip-import-validation 跳过import_validation验证.],
+          %w[--skip-lib-lint 跳过lib验证.],
           %w[--sources 指定依赖的组件仓库.]
         ]
       end
@@ -18,8 +19,9 @@ module Pod
       def initialize(argv)
         @source = argv.shift_argument
         @name = argv.shift_argument
-        @swift_version = argv.flag?('swift_version', nil)
-        @skip_import_validation = argv.flag?('skip_import_validation', false)
+        @swift_version = argv.flag?('swift-version', nil)
+        @skip_import_validation = argv.flag?('skip-import-validation', false)
+        @skip_lib_lint = argv.flag?('skip-lib-lint', false)
         @sources = argv.flag?('sources', %w[trunk BaiTuPods BaiTuFrameworkPods])
         @spec = spec_with_path(@name)
         super
@@ -33,7 +35,7 @@ module Pod
 
       def run
         @project_path = Pathname(@name).parent.to_s
-        validate_podspec
+        validate_podspec unless @skip_lib_lint
         increase_version_number
         save_new_version_to_podspec
         check_repo_status
@@ -112,7 +114,7 @@ module Pod
         command << ' && git add .'
         command << " && git commit -m \"[Update] (#{@new_version})\""
         command << " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
-        command << ' && git push origin main --tags'
+        command << ' && git push origin main --tags --quiet'
 
         config.silent = true
         output = `#{command}`.lines
