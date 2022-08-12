@@ -19,10 +19,10 @@ module Pod
       def initialize(argv)
         @source = argv.shift_argument
         @name = argv.shift_argument
-        @swift_version = argv.flag?('swift-version', nil)
+        @swift_version = argv.option('swift-version', nil)
         @skip_import_validation = argv.flag?('skip-import-validation', false)
         @skip_lib_lint = argv.flag?('skip-lib-lint', false)
-        @sources = argv.flag?('sources', %w[trunk BaiTuPods BaiTuFrameworkPods])
+        @sources = argv.option('sources', 'trunk,BaiTuPods,BaiTuFrameworkPods').split(',')
         @spec = spec_with_path(@name)
         super
       end
