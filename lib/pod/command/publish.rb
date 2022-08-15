@@ -12,7 +12,8 @@ module Pod
           %w[--swift-version 指定Swift版本.],
           %w[--skip-import-validation 跳过import_validation验证.],
           %w[--skip-lib-lint 跳过lib验证.],
-          %w[--sources 指定依赖的组件仓库.]
+          %w[--sources 指定依赖的组件仓库.],
+          %w[--publish-framework 指定发布framework.]
         ]
       end
 
@@ -24,6 +25,7 @@ module Pod
         @skip_lib_lint = argv.flag?('skip-lib-lint', false)
         @sources = argv.option('sources', 'trunk,BaiTuPods,BaiTuFrameworkPods').split(',')
         @spec = spec_with_path(@name)
+        @publish_framework = argv.flag?('publish-framework', false) || @source.eql?('BaiTuFrameworkPods')
         super
       end
 
@@ -34,6 +36,10 @@ module Pod
       end
 
       def run
+        if @publish_framework
+          push_framework_pod
+          return
+        end
         @project_path = Pathname(@name).parent.to_s
         validate_podspec unless @skip_lib_lint
         increase_version_number
@@ -142,11 +148,31 @@ module Pod
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green
           config.silent = true
-        rescue Exception => e
+        rescue StandardError => e
           restore_old_version_to_podspec
           config.silent = false
-          UI.puts "-> #{e.to_s}".red
+          UI.puts "-> #{e}".red
           UI.puts "-> (#{@new_version})发布失败！".red
+          Process.exit
+        end
+      end
+
+      def push_framework_pod
+        version = @spec.attributes_hash['version']
+        UI.puts "-> 正在发布新版本(#{version})...".yellow
+        config.silent = true
+        argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
+        begin
+          command = Repo::Push::PushWithoutValid.new(argv)
+          command.run
+          command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
+          command.run
+          config.silent = false
+          UI.puts "-> (#{version})发布成功！".green
+          config.silent = true
+        rescue StandardError
+          config.silent = false
+          UI.puts "-> (#{version})发布失败！".red
           Process.exit
         end
       end
