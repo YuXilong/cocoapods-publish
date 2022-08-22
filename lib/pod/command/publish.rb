@@ -59,7 +59,7 @@ module Pod
 
         config.silent = false
         unless validator.validated?
-          UI.puts "-> #{@name} 验证未通过！Command：pod lib lint #{@name} --allow-warnings --sources=#{@sources.join(',')}".red
+          UI.puts "-> #{@name} 验证未通过！Command：pod lib lint #{@name} --use-libraries --allow-warnings --sources=#{@sources.join(',')}".red
           Process.exit
         end
         UI.puts "-> #{@name} 验证通过！".green
