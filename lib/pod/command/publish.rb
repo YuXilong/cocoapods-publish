@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require 'pod/command/auto'
+
 module Pod
   class Command
     class Publish < Command
