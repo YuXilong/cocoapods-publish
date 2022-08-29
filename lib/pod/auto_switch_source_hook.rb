@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-Pod::HooksManager.register('cocoapods-publish', :pre_install) do |ctx, _|
-  next unless ctx.podfile.plugins.keys.include?('cocoapods-publish')
+Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
+  next unless context.podfile.plugins.keys.include?('cocoapods-publish')
 
   puts '开始清理缓存...'.yellow
 
@@ -15,5 +15,19 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |ctx, _|
      .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
   puts '缓存清理完成'.green
-  next
+end
+
+Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _|
+  sources_manger = Pod::Config.instance.sources_manager
+  podfile = Pod::Config.instance.podfile
+  next unless podfile
+
+  # 添加源码私有源 && 二进制私有源
+  added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git]
+  added_sources << if ENV['USE_FRAMEWORK']
+    'http://gitlab.v.show/ios_framework/frameworkpods.git'
+  else
+    'http://gitlab.v.show/ios_component/baitupods.git'
+                   end
+  added_sources.each { |source| context.add_source(sources_manger.source_with_name_or_url(source)) }
 end
