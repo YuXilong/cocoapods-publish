@@ -32,7 +32,7 @@ module Pod
           @podspec = find_podspec_file
           # 打包
           unless @skip_package
-            argv = CLAide::ARGV.coerce(@local ? [@podspec, '--local'] : [@podspec])
+            argv = CLAide::ARGV.coerce(@local ? [@podspec, '--local', '--no-show-tips'] : [@podspec])
             Pod::Command::Package.new(argv).run
           end
 
