@@ -121,10 +121,10 @@ module Pod
         UI.puts '-> 创建新版本...'.yellow
 
         command = "cd #{@project_path}"
-        command << ' && git add .'
-        command << " && git commit -m \"[Update] (#{@new_version})\""
-        command << " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
-        command << ' && git push origin main --tags --quiet'
+        command += ' && git add .'
+        command += " && git commit -m \"[Update] (#{@new_version})\""
+        command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
+        command += ' && git push origin main --tags --quiet'
 
         config.silent = true
         output = `#{command}`.lines
