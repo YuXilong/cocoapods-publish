@@ -3,10 +3,19 @@
 Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   next unless context.podfile.plugins.keys.include?('cocoapods-publish')
 
-  puts '开始清理缓存...'.yellow
-
   project_root = "#{Pod::Config.instance.project_root}/Pods"
   cache_root = "#{Pod::Config.instance.cache_root}/Pods"
+
+  use_framework = ENV['USE_FRAMEWORK']
+  if use_framework && !Dir.glob("#{project_root}/**/BT*/**/*.framework").empty? && !Dir.glob("#{cache_root}/**/BT*/**/*.framework").empty?
+    next
+  end
+
+  if !use_framework && Dir.glob("#{project_root}/**/BT*/**/*.framework").empty? && Dir.glob("#{cache_root}/**/BT*/**/*.framework").empty?
+    next
+  end
+
+  puts '开始清理缓存...'.yellow
 
   Dir.glob("#{cache_root}/**/BT*/")
      .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
@@ -26,7 +35,7 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
   added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git]
   added_sources << if ENV['USE_FRAMEWORK']
     'http://gitlab.v.show/ios_framework/frameworkpods.git'
-  else
+                   else
     'http://gitlab.v.show/ios_component/baitupods.git'
                    end
   added_sources.each { |source| context.add_source(sources_manger.source_with_name_or_url(source)) }
