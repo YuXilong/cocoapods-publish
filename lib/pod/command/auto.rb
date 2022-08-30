@@ -12,15 +12,15 @@ module Pod
         def self.options
           [
             %w[--local 指定使用本地版本构建二进制.],
-            %w[--skip-lib-lint 跳过lib验证.],
-            %w[--skip-package 跳过lib验证.]
+            %w[--lib-lint lib验证.],
+            %w[--skip-package 跳过制作二进制.]
           ]
         end
 
         def initialize(argv)
           @podspec_root = argv.shift_argument
           @local = argv.flag?('local', true)
-          @skip_lib_lint = argv.flag?('skip-lib-lint', false)
+          @lib_lint = argv.flag?('lib-lint', false)
           @skip_package = argv.flag?('skip-package', false)
           super
         end
@@ -32,13 +32,15 @@ module Pod
           @podspec = find_podspec_file
           # 打包
           unless @skip_package
+            puts '-> 正在生成二进制...'.yellow
             argv = CLAide::ARGV.coerce(@local ? [@podspec, '--local', '--no-show-tips'] : [@podspec])
             Pod::Command::Package.new(argv).run
+            puts '-> 二进制生成成功！'.yellow
           end
 
           # 发布源码
           puts '-> 正在发布到源码私有库...'.yellow
-          argv = CLAide::ARGV.coerce(@skip_lib_lint ? ['BaiTuPods', @podspec, '--skip-lib-lint'] : ['BaiTuPods', @podspec])
+          argv = CLAide::ARGV.coerce(@lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint'])
           Publish.new(argv).run
           puts '-> 已发布到源码私有库'.green
 
@@ -47,6 +49,7 @@ module Pod
           argv = CLAide::ARGV.coerce(['BaiTuFrameworkPods', @podspec])
           Publish.new(argv).run
           puts '-> 已发布到二进制私有库'.green
+          puts '-> 发布完成'.green
         end
 
         # 自动查找当前目前的podspec文件
