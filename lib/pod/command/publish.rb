@@ -46,6 +46,7 @@ module Pod
         end
         @project_path = Pathname(@name).parent.to_s
         validate_podspec unless @skip_lib_lint
+        check_remote_repo
         increase_version_number
         save_new_version_to_podspec
         check_repo_status
