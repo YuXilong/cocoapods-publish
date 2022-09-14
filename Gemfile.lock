@@ -48,7 +48,7 @@ GIT
 PATH
   remote: .
   specs:
-    cocoapods-publish (1.0.5)
+    cocoapods-publish (1.0.6)
 
 GEM
   remote: https://rubygems.org/
@@ -102,6 +102,7 @@ GEM
     parallel (1.22.1)
     parser (3.1.2.0)
       ast (~> 2.4.1)
+    plist (3.6.0)
     prettybacon (0.0.2)
       bacon (~> 1.2)
     public_suffix (4.0.7)
@@ -150,6 +151,7 @@ DEPENDENCIES
   cocoapods-publish!
   mocha
   mocha-on-bacon
+  plist
   prettybacon
   rake
   rubocop

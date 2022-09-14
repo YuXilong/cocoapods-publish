@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'English'
 Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   next unless context.podfile.plugins.keys.include?('cocoapods-publish')
 
@@ -24,6 +25,20 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
      .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
   puts '缓存清理完成'.green
+end
+
+require 'plist'
+Pod::HooksManager.register('cocoapods-publish', :post_install) do |context, _|
+  project_root = "#{Pod::Config.instance.project_root}/Pods"
+  next if Dir.glob("#{project_root}/**/RCConfig.plist").empty?
+
+  Dir.glob("#{project_root}/**/RCConfig.plist")
+     .each do |file|
+    command = "/usr/libexec/PlistBuddy -c 'Add :Connection dict' #{file}"
+    command += " && /usr/libexec/PlistBuddy -c 'Add :Connection:ForceKeepAlive bool true' #{file} 2>/dev/null"
+    `#{command}`
+    puts 'RCConfig.plist配置项同步成功！'.green if $CHILD_STATUS.exitstatus.zero?
+  end
 end
 
 Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _|
