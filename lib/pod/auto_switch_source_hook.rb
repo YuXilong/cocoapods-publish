@@ -27,7 +27,6 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   puts '缓存清理完成'.green
 end
 
-require 'plist'
 Pod::HooksManager.register('cocoapods-publish', :post_install) do |context, _|
   project_root = "#{Pod::Config.instance.project_root}/Pods"
   next if Dir.glob("#{project_root}/**/RCConfig.plist").empty?
