@@ -8,7 +8,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   cache_root = "#{Pod::Config.instance.cache_root}/Pods"
 
   use_framework = ENV['USE_FRAMEWORK'] == '1'
-  if use_framework && !Dir.glob("#{project_root}/**/BT*/**/BT*.framework").empty? && !Dir.glob("#{cache_root}/**/BT*/**/*.framework").empty?
+  if use_framework && !Dir.glob("#{project_root}/**/BT*/**/BT*.framework").empty? && !Dir.glob("#{cache_root}/**/BT*/**/BT*.framework").empty?
     next
   end
 
