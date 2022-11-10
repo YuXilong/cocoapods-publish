@@ -14,9 +14,10 @@ module Pod
             %w[--local 指定使用本地版本构建二进制.],
             %w[--lib-lint lib验证.],
             %w[--skip-package 跳过制作二进制.],
+            %w[--clean-cache 构建时清除本地所有的组件缓存.⚠️注意：开启后会重新下载所有组件],
             %w[--mixup 开启构建时代码混淆功能.],
             %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
-            %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL`],
+            %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`]
           ]
         end
@@ -30,8 +31,11 @@ module Pod
           # 代码混淆配置项
           @mixup = argv.flag?('mixup', false)
           @old_class_prefix = argv.option('old-class-prefix', 'BT')
-          @new_class_prefixes = argv.option('new-class-prefixes', 'MNL').split(',')
-          @filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,').split(',')
+          @new_class_prefixes = argv.option('new-class-prefixes', 'MNL,PPL')
+          @filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,')
+
+          # 更新本地缓存
+          @clean_cache = argv.flag?('clean-cache', false)
 
           super
         end
@@ -47,6 +51,7 @@ module Pod
 
             args = [@podspec]
             args.push('--local', '--no-show-tips') if @local
+            args.push('--clean-cache') if @clean_cache
             args.push('--mixup') if @mixup
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
