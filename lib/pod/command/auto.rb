@@ -13,7 +13,11 @@ module Pod
           [
             %w[--local 指定使用本地版本构建二进制.],
             %w[--lib-lint lib验证.],
-            %w[--skip-package 跳过制作二进制.]
+            %w[--skip-package 跳过制作二进制.],
+            %w[--mixup 开启构建时代码混淆功能.],
+            %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
+            %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL`],
+            %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`]
           ]
         end
 
@@ -22,6 +26,13 @@ module Pod
           @local = argv.flag?('local', true)
           @lib_lint = argv.flag?('lib-lint', false)
           @skip_package = argv.flag?('skip-package', false)
+
+          # 代码混淆配置项
+          @mixup = argv.flag?('mixup', false)
+          @old_class_prefix = argv.option('old-class-prefix', 'BT')
+          @new_class_prefixes = argv.option('new-class-prefixes', 'MNL').split(',')
+          @filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,').split(',')
+
           super
         end
 
@@ -33,7 +44,15 @@ module Pod
           # 打包
           unless @skip_package
             puts '-> 正在生成二进制...'.yellow
-            argv = CLAide::ARGV.coerce(@local ? [@podspec, '--local', '--no-show-tips'] : [@podspec])
+
+            args = [@podspec]
+            args.push('--local', '--no-show-tips') if @local
+            args.push('--mixup') if @mixup
+            args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
+            args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
+            args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
+
+            argv = CLAide::ARGV.coerce(args)
             Pod::Command::Package.new(argv).run
             puts '-> 二进制生成成功！'.yellow
           end

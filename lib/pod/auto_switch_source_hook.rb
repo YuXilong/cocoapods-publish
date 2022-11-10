@@ -3,6 +3,10 @@
 require 'English'
 Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   next unless context.podfile.plugins.keys.include?('cocoapods-publish')
+  # install! 'cocoapods',
+  #          :deterministic_uuids => false,
+  #          :integrate_targets => false,
+  #          :warn_for_multiple_pod_sources => false
 
   project_root = "#{Pod::Config.instance.project_root}/Pods"
   cache_root = "#{Pod::Config.instance.cache_root}/Pods"
@@ -15,6 +19,8 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   if !use_framework && Dir.glob("#{project_root}/**/BT*/**/BT*.framework").empty? && Dir.glob("#{cache_root}/**/BT*/**/BT*.framework").empty?
     next
   end
+
+  next
 
   puts '开始清理缓存...'.yellow
 
