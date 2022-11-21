@@ -48,7 +48,7 @@ GIT
 PATH
   remote: .
   specs:
-    cocoapods-publish (2.0.1)
+    cocoapods-publish (2.0.2)
 
 GEM
   remote: https://rubygems.org/

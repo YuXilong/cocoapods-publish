@@ -24,3 +24,11 @@ module Pod
   end
 end
 
+module Pod
+  class Installer
+    class PodSourceDownloader
+      UNENCRYPTED_PROTOCOLS = %w(git).freeze
+    end
+  end
+end
+
