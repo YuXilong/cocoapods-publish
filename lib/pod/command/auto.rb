@@ -18,7 +18,8 @@ module Pod
             %w[--mixup 开启构建时代码混淆功能.],
             %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
             %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
-            %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`]
+            %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
+            %w[--from-wukong 发起者为`wukong`]
           ]
         end
 
@@ -37,6 +38,8 @@ module Pod
           # 更新本地缓存
           @clean_cache = argv.flag?('clean-cache', false)
 
+          @from_wukong = argv.flag?('from-wukong', false)
+
           super
         end
 
@@ -47,33 +50,46 @@ module Pod
           @podspec = find_podspec_file
           # 打包
           unless @skip_package
-            puts '-> 正在生成二进制...'.yellow
+            puts '-> 正在生成二进制...'.yellow unless @from_wukong
 
             args = [@podspec]
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
             args.push('--mixup') if @mixup
+            args.push('--from-wukong') if @from_wukong
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
             args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
 
             argv = CLAide::ARGV.coerce(args)
             Pod::Command::Package.new(argv).run
-            puts '-> 二进制生成成功！'.yellow
+            puts '-> 二进制生成成功！'.yellow unless @from_wukong
           end
 
+          puts '-> 正在发布...'.yellow if @from_wukong
+
           # 发布源码
-          puts '-> 正在发布到源码私有库...'.yellow
-          argv = CLAide::ARGV.coerce(@lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint'])
+          begin_time = (Time.now.to_f * 1000).to_i
+          puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
+          params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
+          params << '--from-wukong' if @from_wukong
+          argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
-          puts '-> 已发布到源码私有库'.green
+          end_time = (Time.now.to_f * 1000).to_i
+          duration = end_time - begin_time
+          puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
 
           # 发布二进制
-          puts '-> 正在发布到二进制私有库...'.yellow
-          argv = CLAide::ARGV.coerce(['BaiTuFrameworkPods', @podspec])
+          begin_time = (Time.now.to_f * 1000).to_i
+          puts '-> 正在发布到二进制私有库...'.yellow unless @from_wukong
+          params = ['BaiTuFrameworkPods', @podspec]
+          params << '--from-wukong' if @from_wukong
+          argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
-          puts '-> 已发布到二进制私有库'.green
-          puts '-> 发布完成'.green
+          end_time = (Time.now.to_f * 1000).to_i
+          duration = end_time - begin_time
+          puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]".green
+          puts '-> 发布完成'.green unless @from_wukong
         end
 
         # 自动查找当前目前的podspec文件
@@ -85,7 +101,7 @@ module Pod
 
           if files.empty?
             puts '-> 未找到.podspec配置文件'.red
-            Process.exit
+            Process.exit(1)
           end
 
           index = 1
@@ -98,7 +114,7 @@ module Pod
 
             unless (1...files.count + 1).include?(index)
               puts '-> 输入不正确，请重试！'.red
-              Process.exit
+              Process.exit(1)
             end
           end
 

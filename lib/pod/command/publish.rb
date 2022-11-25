@@ -17,7 +17,8 @@ module Pod
           %w[--skip-import-validation 跳过import_validation验证.],
           %w[--skip-lib-lint 跳过lib验证.],
           %w[--sources 指定依赖的组件仓库.],
-          %w[--publish-framework 指定发布framework.]
+          %w[--publish-framework 指定发布framework.],
+          %w[--from-wukong 发起者为`wukong`]
         ]
       end
 
@@ -30,6 +31,7 @@ module Pod
         @sources = argv.option('sources', 'trunk,BaiTuPods,BaiTuFrameworkPods').split(',')
         @spec = spec_with_path(@name)
         @publish_framework = argv.flag?('publish-framework', false) || @source.eql?('BaiTuFrameworkPods')
+        @from_wukong = argv.flag?('from-wukong', false)
         super
       end
 
@@ -71,7 +73,7 @@ module Pod
         config.silent = false
         unless validator.validated?
           UI.puts "-> #{@name} 验证未通过！Command：pod lib lint #{@name} --use-libraries --allow-warnings --sources=#{@sources.join(',')}".red
-          Process.exit
+          Process.exit(1)
         end
         UI.puts "-> #{@name} 验证通过！".green
       end
@@ -119,7 +121,7 @@ module Pod
 
       # 创建tag
       def create_tag
-        UI.puts '-> 创建新版本...'.yellow
+        UI.puts '-> 创建新版本...'.yellow unless @from_wukong
 
         command = "cd #{@project_path}"
         command += ' && git add .'
@@ -135,14 +137,14 @@ module Pod
           UI.puts "-> #{output}".red
           UI.puts "-> 创建新版本失败！Command： #{command}".red
           restore_old_version_to_podspec
-          Process.exit
+          Process.exit(1)
         end
-        UI.puts "-> 新版本(#{@new_version})创建成功！".green
+        UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
       end
 
       # 推送新版本到私有库
       def push_pods
-        UI.puts "-> 发布新版本(#{@new_version})...".yellow
+        UI.puts "-> 发布新版本(#{@new_version})...".yellow unless @from_wukong
         config.silent = true
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
@@ -151,20 +153,20 @@ module Pod
           command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
           command.run
           config.silent = false
-          UI.puts "-> (#{@new_version})发布成功！".green
+          UI.puts "-> (#{@new_version})发布成功！".green unless @from_wukong
           config.silent = true
         rescue StandardError => e
           restore_old_version_to_podspec
           config.silent = false
           UI.puts "-> #{e}".red
           UI.puts "-> (#{@new_version})发布失败！".red
-          Process.exit
+          Process.exit(1)
         end
       end
 
       def push_framework_pod
         version = @spec.attributes_hash['version']
-        UI.puts "-> 正在发布新版本(#{version})...".yellow
+        UI.puts "-> 正在发布新版本(#{version})...".yellow unless @from_wukong
         config.silent = true
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
@@ -173,12 +175,12 @@ module Pod
           command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
           command.run
           config.silent = false
-          UI.puts "-> (#{version})发布成功！".green
+          UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = true
         rescue StandardError
           config.silent = false
           UI.puts "-> (#{version})发布失败！".red
-          Process.exit
+          Process.exit(1)
         end
       end
     end

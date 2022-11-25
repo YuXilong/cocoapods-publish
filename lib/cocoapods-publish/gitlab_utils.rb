@@ -13,7 +13,7 @@ module Pod
 
       # 检查仓库状态 没有就创建一个新的仓库
       def check_remote_repo
-        UI.puts '-> 正在检查远程仓库状态...'.yellow
+        UI.puts '-> 正在检查远程仓库状态...'.yellow unless @from_wukong
         project_id
       end
 
@@ -21,10 +21,10 @@ module Pod
         response = send_request(GET, "/groups/#{GITLAB_GROUP_ID}")
         projects = response['projects']
         unless projects.select! { |p| p['name'].eql?(@spec.name) }.empty?
-          UI.puts '-> 获取远程仓库信息成功！'.green
+          UI.puts '-> 获取远程仓库信息成功！'.green unless @from_wukong
           return
         end
-        UI.puts '-> 正在创建远程仓库...'.yellow
+        UI.puts '-> 正在创建远程仓库...'.yellow unless @from_wukong
         create_project
       end
 
@@ -37,11 +37,11 @@ module Pod
           'initialize_with_readme': false
         }
         response = send_request(POST, 'projects/', params)
-        UI.puts '-> 远程仓库创建成功！'.green
+        UI.puts '-> 远程仓库创建成功！'.green unless @from_wukong
         ssh_url = response['ssh_url_to_repo']
         default_branch = response['default_branch']
 
-        UI.puts '-> 正在关联远程仓库...'.yellow
+        UI.puts '-> 正在关联远程仓库...'.yellow unless @from_wukong
         command = "git branch -M #{default_branch} --quiet"
         command += " && git remote add origin #{ssh_url}"
         command += ' && git add . && git commit -m "Initial commit" --quiet'
@@ -49,9 +49,9 @@ module Pod
         `#{command}`
         if $CHILD_STATUS.exitstatus != 0
           UI.puts '-> 远程仓库关联失败！'.red
-          Process.exit
+          Process.exit(1)
         end
-        UI.puts '-> 远程仓库关联成功！'.green
+        UI.puts '-> 远程仓库关联成功！'.green unless @from_wukong
       end
 
       def send_request(type, path, params = {}, host = GITLAB_API)
@@ -77,7 +77,7 @@ module Pod
           UI.puts "-> 接口请求失败：#{uri}, Authorization: Bearer #{GITLAB_TOKEN}".red
           UI.puts "-> 响应Code：#{response.code}".red
           UI.puts "-> 返回内容\n：#{JSON::pretty_generate(JSON(response.body))}".red
-          Process.exit
+          Process.exit(1)
         end
       end
 
