@@ -44,19 +44,6 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   puts '已切换源地址'.green
 end
 
-# Pod::HooksManager.register('cocoapods-publish', :post_install) do |context, _|
-#   project_root = "#{Pod::Config.instance.project_root}/Pods"
-#   next if Dir.glob("#{project_root}/**/RCConfig.plist").empty?
-#
-#   Dir.glob("#{project_root}/**/RCConfig.plist")
-#      .each do |file|
-#     command = "/usr/libexec/PlistBuddy -c 'Add :Connection dict' #{file}"
-#     command += " && /usr/libexec/PlistBuddy -c 'Add :Connection:ForceKeepAlive bool true' #{file} 2>/dev/null"
-#     `#{command}`
-#     puts 'RCConfig.plist配置项同步成功！'.green if $CHILD_STATUS.exitstatus.zero?
-#   end
-# end
-
 Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _|
   sources_manger = Pod::Config.instance.sources_manager
   podfile = Pod::Config.instance.podfile
