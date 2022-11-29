@@ -38,8 +38,6 @@ module Pod
           # 更新本地缓存
           @clean_cache = argv.flag?('clean-cache', false)
 
-          @from_wukong = argv.flag?('from-wukong', false)
-
           super
         end
 
@@ -48,6 +46,7 @@ module Pod
         def run
           @podspec_root ||= Dir.pwd
           @podspec = find_podspec_file
+
           # 打包
           unless @skip_package
             puts '-> 正在生成二进制...'.yellow unless @from_wukong
