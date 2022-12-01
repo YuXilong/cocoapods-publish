@@ -41,6 +41,9 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     `mv #{target_root} #{framework_cache_root}`
     `mv #{source_cache_root} #{target_root}`
   end
+
+  Dir.glob("#{project_pods_root}/BT*").each { |path| `rm -rf #{path}` }
+
   puts '已切换源地址'.green
 end
 
