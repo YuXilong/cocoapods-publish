@@ -44,6 +44,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
 
   Dir.glob("#{project_pods_root}/BT*").each { |path| `rm -rf #{path}` }
 
+
   puts '已切换源地址'.green
 end
 
@@ -52,9 +53,11 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
   podfile = Pod::Config.instance.podfile
   next unless podfile
 
+  use_framework = ENV['USE_FRAMEWORK'] == '1'
+
   # 添加源码私有源 && 二进制私有源
   added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git]
-  added_sources << if ENV['USE_FRAMEWORK']
+  added_sources << if use_framework
     'http://gitlab.v.show/ios_framework/frameworkpods.git'
                    else
     'http://gitlab.v.show/ios_component/baitupods.git'
