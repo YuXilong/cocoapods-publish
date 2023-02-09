@@ -16,14 +16,14 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
-  # 移除本地项目内缓存
-  Dir.glob("#{project_pods_root}/**/BT*/")
-     .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
-
   # 初始化缓存
   if !Dir.exist?(source_cache_root) && !Dir.exist?(framework_cache_root)
     puts '初始化自定义缓存...'.yellow
     Dir.glob("#{cache_root}/**/BT*/")
+       .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
+
+    # 移除本地项目内缓存
+    Dir.glob("#{project_pods_root}/**/BT*/")
        .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
     `cp -r #{target_root} #{source_cache_root}`
@@ -33,6 +33,10 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
 
   is_using_framework = Dir.glob("#{cache_root}/**/BT*/**/*.framework").count > 5
   next if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
+
+  # 移除本地项目内缓存
+  Dir.glob("#{project_pods_root}/**/BT*/")
+     .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
   # 切换仓库，同步缓存
   puts '正在切换模式，同步缓存...'.yellow
