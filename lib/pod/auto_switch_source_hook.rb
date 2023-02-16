@@ -32,6 +32,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   end
 
   is_using_framework = Dir.glob("#{cache_root}/**/BT*/**/*.framework").count > 5
+  fix_cache(cache_root, project_pods_root, use_framework)
   next if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
 
   # 移除本地项目内缓存
@@ -53,6 +54,43 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   end
 
   puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
+end
+
+# 修正本地缓存
+def fix_cache(cache_root, project_pods_root, use_framework)
+  ignore_names = %w[BTDContext BTAssets BTGlobalConfig]
+
+  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").each do |file|
+    json = JSON(File.open(file).read)
+    type = json['source']['type']
+    tag = json['source']['tag']
+    name = json['name']
+    version = json['version']
+    if use_framework
+      next if type == 'zip' || ignore_names.include?(name)
+
+      `rm #{file}`
+      Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
+      `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
+      puts "已修正#{name}-#{version}缓存"
+    else
+      next if tag == version || ignore_names.include?(name)
+
+      `rm #{file}`
+      Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
+      Dir.glob("#{project_pods_root}/#{name}").each { |source_dir| `rm -rf #{source_dir}` }
+      puts "已修正#{name}-#{version}缓存"
+    end
+
+  end
+
+  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*").each do |file|
+    Dir.rmdir(file) if Dir.empty?(file)
+  end
+
+  Dir.glob("#{cache_root}/Pods/Release/BT*").each do |file|
+    Dir.rmdir(file) if Dir.empty?(file)
+  end
 end
 
 Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _|
