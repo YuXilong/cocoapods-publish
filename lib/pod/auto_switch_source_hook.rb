@@ -31,9 +31,11 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
-  is_using_framework = Dir.glob("#{cache_root}/**/BT*/**/*.framework").count > 5
-  fix_cache(cache_root, project_pods_root, use_framework)
-  next if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
+  is_using_framework = Dir.glob("#{cache_root}/Pods/**/BT*.framework").count > 0
+  if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
+    fix_cache(cache_root, project_pods_root, use_framework)
+    next
+  end
 
   # 移除本地项目内缓存
   Dir.glob("#{project_pods_root}/**/BT*/")
@@ -52,13 +54,13 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     `rm -rf #{target_root}`
     `cp -r #{source_cache_root} #{target_root}`
   end
-
+  fix_cache(cache_root, project_pods_root, use_framework)
   puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
 end
 
 # 修正本地缓存
 def fix_cache(cache_root, project_pods_root, use_framework)
-  ignore_names = %w[BTDContext BTAssets BTGlobalConfig]
+  ignore_names = %w[BTDContext BTAssets]
 
   Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").each do |file|
     json = JSON(File.open(file).read)
@@ -74,7 +76,7 @@ def fix_cache(cache_root, project_pods_root, use_framework)
       `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
       puts "已修正#{name}-#{version}缓存"
     else
-      next if tag == version || ignore_names.include?(name)
+      next if tag == version
 
       `rm #{file}`
       Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
@@ -91,6 +93,8 @@ def fix_cache(cache_root, project_pods_root, use_framework)
   Dir.glob("#{cache_root}/Pods/Release/BT*").each do |file|
     Dir.rmdir(file) if Dir.empty?(file)
   end
+
+  Dir.glob("#{cache_root}/Pods/**/BT*/**/BT*.framework").each { |f| `rm -rf #{f}` } unless use_framework
 end
 
 Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _|
