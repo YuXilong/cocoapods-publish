@@ -31,7 +31,8 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
-  is_using_framework = Dir.glob("#{cache_root}/Pods/**/BT*.framework").count > 0
+  # /Users/yuxilong/Library/Caches/CocoaPods
+  is_using_framework = using_framework_specs(cache_root).count.positive?
   if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
     fix_cache(cache_root, project_pods_root, use_framework)
     next
@@ -56,6 +57,14 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   end
   fix_cache(cache_root, project_pods_root, use_framework)
   puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
+end
+
+def using_framework_specs(cache_root)
+  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").filter do |file|
+    json = JSON(File.open(file).read)
+    type = json['source']['type']
+    type == 'zip'
+  end
 end
 
 # 修正本地缓存
