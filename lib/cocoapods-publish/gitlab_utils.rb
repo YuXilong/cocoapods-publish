@@ -43,6 +43,7 @@ module Pod
 
         UI.puts '-> 正在关联远程仓库...'.yellow unless @from_wukong
         command = "git branch -M #{default_branch} --quiet"
+        command += ' && git remote remove origin'
         command += " && git remote add origin #{ssh_url}"
         command += ' && git add . && git commit -m "Initial commit" --quiet'
         command += ' && git push origin main --quiet'
