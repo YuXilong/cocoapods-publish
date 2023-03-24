@@ -19,7 +19,8 @@ module Pod
             %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
             %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
-            %w[--from-wukong 发起者为`wukong`]
+            %w[--from-wukong 发起者为`wukong`],
+            %w[--v2 使用`v2`构建系统]
           ]
         end
 
@@ -37,6 +38,9 @@ module Pod
 
           # 更新本地缓存
           @clean_cache = argv.flag?('clean-cache', false)
+
+          # 使用`v2`构建系统
+          @use_build_v2 = argv.flag?('v2', false)
 
           super
         end
@@ -56,6 +60,7 @@ module Pod
             args.push('--clean-cache') if @clean_cache
             args.push('--mixup') if @mixup
             args.push('--from-wukong') if @from_wukong
+            args.push('--v2') if @use_build_v2
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
             args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
