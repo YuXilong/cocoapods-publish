@@ -20,7 +20,8 @@ module Pod
             %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
             %w[--from-wukong 发起者为`wukong`],
-            %w[--v2 使用`v2`构建系统]
+            %w[--v2 使用`v2`构建系统],
+            %w[--beta 发布beta版本]
           ]
         end
 
@@ -42,6 +43,9 @@ module Pod
           # 使用`v2`构建系统
           @use_build_v2 = argv.flag?('v2', false)
 
+          # 发布beta版本
+          @beta_version = argv.flag?('beta', false)
+
           super
         end
 
@@ -61,6 +65,7 @@ module Pod
             args.push('--mixup') if @mixup
             args.push('--from-wukong') if @from_wukong
             args.push('--v2') if @use_build_v2
+            args.push('--beta') if @beta_version
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
             args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
@@ -72,22 +77,25 @@ module Pod
 
           puts '-> 正在发布...'.yellow if @from_wukong
 
-          # 发布源码
-          begin_time = (Time.now.to_f * 1000).to_i
-          puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
-          params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
-          params << '--from-wukong' if @from_wukong
-          argv = CLAide::ARGV.coerce(params)
-          Publish.new(argv).run
-          end_time = (Time.now.to_f * 1000).to_i
-          duration = end_time - begin_time
-          puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
+          unless @beta_version
+            # 发布源码
+            begin_time = (Time.now.to_f * 1000).to_i
+            puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
+            params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
+            params << '--from-wukong' if @from_wukong
+            argv = CLAide::ARGV.coerce(params)
+            Publish.new(argv).run
+            end_time = (Time.now.to_f * 1000).to_i
+            duration = end_time - begin_time
+            puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
+          end
 
           # 发布二进制
           begin_time = (Time.now.to_f * 1000).to_i
           puts '-> 正在发布到二进制私有库...'.yellow unless @from_wukong
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
+          params << '--beta' if @beta_version
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i

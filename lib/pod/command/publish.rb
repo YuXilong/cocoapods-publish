@@ -18,7 +18,8 @@ module Pod
           %w[--skip-lib-lint 跳过lib验证.],
           %w[--sources 指定依赖的组件仓库.],
           %w[--publish-framework 指定发布framework.],
-          %w[--from-wukong 发起者为`wukong`]
+          %w[--from-wukong 发起者为`wukong`],
+          %w[--beta 发布beta版本]
         ]
       end
 
@@ -32,6 +33,10 @@ module Pod
         @spec = spec_with_path(@name)
         @publish_framework = argv.flag?('publish-framework', false) || @source.eql?('BaiTuFrameworkPods')
         @from_wukong = argv.flag?('from-wukong', false)
+
+        # 发布beta版本
+        @beta_version = argv.flag?('beta', false)
+
         super
       end
 
@@ -82,6 +87,9 @@ module Pod
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
         @new_version = increase_number(@old_version)
+
+        @new_version = "#{@new_version}-beta" if @beta_version
+
         @spec.attributes_hash['version'] = @new_version
       end
 

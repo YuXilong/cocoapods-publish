@@ -16,6 +16,9 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
+  # 自动指定单个库开启源码模式
+  context.podfile.check_envs
+
   # 初始化缓存
   if !Dir.exist?(source_cache_root) && !Dir.exist?(framework_cache_root)
     puts '初始化自定义缓存...'.yellow
