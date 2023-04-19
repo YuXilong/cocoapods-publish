@@ -34,10 +34,17 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
+  # 获取混淆库
+  mixup_libs_map = {}
+  context.podfile.dependencies.filter { |de| de.name.start_with?('BT') && de.name.include?('/') }.each do |de|
+    result = de.name.split('/')
+    mixup_libs_map[result[0]] = result[1]
+  end
+
   # /Users/yuxilong/Library/Caches/CocoaPods
   is_using_framework = using_framework_specs(cache_root).count.positive?
   if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
-    fix_cache(cache_root, project_pods_root, use_framework)
+    fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
     next
   end
 
@@ -58,7 +65,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     `rm -rf #{target_root}`
     `cp -r #{source_cache_root} #{target_root}`
   end
-  fix_cache(cache_root, project_pods_root, use_framework)
+  fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
   puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
 end
 
@@ -71,13 +78,14 @@ def using_framework_specs(cache_root)
 end
 
 # 修正本地缓存
-def fix_cache(cache_root, project_pods_root, use_framework)
+def fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
   ignore_names = %w[BTDContext BTAssets]
 
   Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").each do |file|
     json = JSON(File.open(file).read)
     type = json['source']['type']
     tag = json['source']['tag']
+    http = json['source']['http']
     name = json['name']
     version = json['version']
     if use_framework
@@ -96,6 +104,22 @@ def fix_cache(cache_root, project_pods_root, use_framework)
       puts "已修正#{name}-#{version}缓存"
     end
 
+  end
+
+  mixup_libs_map.each do |k, v|
+    Dir.glob("#{cache_root}/Pods/Specs/Release/#{k}/*.podspec.json").each do |file|
+      json = JSON(File.open(file).read)
+      http = json['source']['http']
+      next if http.include?("repository/files/#{v}")
+
+      name = json['name']
+      version = json['version']
+
+      `rm #{file}`
+      Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
+      `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
+      puts "已修正#{k}/#{v}-#{version}缓存"
+    end
   end
 
   Dir.glob("#{cache_root}/Pods/Specs/Release/BT*").each do |file|

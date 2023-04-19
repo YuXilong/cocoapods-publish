@@ -35,7 +35,7 @@ module Pod
         @from_wukong = argv.flag?('from-wukong', false)
 
         # 发布beta版本
-        @beta_version = argv.flag?('beta', false)
+        @beta_version_publish = argv.flag?('beta', false)
 
         super
       end
@@ -47,7 +47,12 @@ module Pod
       end
 
       def run
+
         if @publish_framework
+          if @beta_version_publish
+            increase_version_number
+            save_new_version_to_podspec
+          end
           push_framework_pod
           return
         end
@@ -87,14 +92,24 @@ module Pod
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
         @new_version = increase_number(@old_version)
-
-        @new_version = "#{@new_version}-beta" if @beta_version
-
         @spec.attributes_hash['version'] = @new_version
       end
 
       # 自增版本号
       def increase_number(number)
+        if @beta_version_publish
+          new_version = "#{number}.b1"
+          if number.include?('.b')
+            v = number.split('.b')[0]
+            b_v = number.split('.b')[1].to_i
+            b_v += 1
+            new_version = "#{v}.b#{b_v}"
+          end
+          return new_version
+        end
+
+        number = number.split('.b')[0] if number.include?('.b')
+
         numbers = number.split('.')
         count = numbers.length
         case count

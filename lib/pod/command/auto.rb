@@ -44,7 +44,7 @@ module Pod
           @use_build_v2 = argv.flag?('v2', false)
 
           # 发布beta版本
-          @beta_version = argv.flag?('beta', false)
+          @beta_version_auto = argv.flag?('beta', false)
 
           super
         end
@@ -65,7 +65,7 @@ module Pod
             args.push('--mixup') if @mixup
             args.push('--from-wukong') if @from_wukong
             args.push('--v2') if @use_build_v2
-            args.push('--beta') if @beta_version
+            args.push('--beta') if @beta_version_auto
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
             args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
@@ -77,7 +77,7 @@ module Pod
 
           puts '-> 正在发布...'.yellow if @from_wukong
 
-          unless @beta_version
+          unless @beta_version_auto
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
@@ -95,7 +95,7 @@ module Pod
           puts '-> 正在发布到二进制私有库...'.yellow unless @from_wukong
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
-          params << '--beta' if @beta_version
+          params << '--beta' if @beta_version_auto
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i
