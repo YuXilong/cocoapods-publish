@@ -124,7 +124,7 @@ module Pod
         text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{@new_version}'")
         File.open(@name, 'w') { |file| file.puts text }
 
-        check_pod_http_source
+        check_pod_http_source_publish
       end
 
       # 恢复旧版本
@@ -134,8 +134,9 @@ module Pod
         File.open(@name, 'w') { |file| file.puts text }
       end
 
-      def check_pod_http_source
-        content = File.open(@name).read
+      # 适配新的文件保存路径
+      def check_pod_http_source_publish
+        content = File.open(@name).read.to_s
         # 已添加subspec跳过
         return if content.include?('zip_file_path = s.')
 
@@ -143,14 +144,15 @@ module Pod
           zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : "repository/files/#\{s.version.to_s}"
             if use_framework
         CONTENT
-        content.gsub!('if use_framework', zip_file_path.to_s)
+        zip_file_path = zip_file_path.chomp
+        content.gsub!('if use_framework', zip_file_path)
 
         zip_file_path = <<~CONTENT
-          :http => "https://gitlab.v.show/api/v4/projects/83/#\{zip_file_path}/#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main,"
+          #\{zip_file_path}/#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main",
         CONTENT
-        content.gsub!(/:http => "https:\/\/gitlab.v.show\/api\/v4\/projects\/(\d+)\/repository\/files\/#\{s.name.to_s}-#\{s.version.to_s}\.zip\/raw\?ref=main,"/, zip_file_path)
-
-        File.open(@name, 'w') {|fw| fw.write(content) }
+        zip_file_path = zip_file_path.chomp
+        content.gsub!(%r{repository/files/#\{s.name.to_s\}-#\{s.version.to_s\}\.zip/raw\?ref=main",}, zip_file_path)
+        File.open(@name, 'w') { |fw| fw.write(content) }
       end
 
       # 检查当前仓库状态
@@ -166,14 +168,15 @@ module Pod
       # 创建tag
       def create_tag
         UI.puts '-> 创建新版本...'.yellow unless @from_wukong
+        branch = get_current_branch
 
         command = "cd #{@project_path}"
         command += ' && git add .'
         command += " && git commit -m \"[Update] (#{@new_version})\""
-        command += ' && git fetch'
-        command += ' && git pull'
+        # command += ' && git fetch'
+        # command += " && git pull origin #{branch}"
         command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
-        command += ' && git push origin main --tags --quiet'
+        command += " && git push origin #{branch} --tags --quiet"
 
         config.silent = true
         output = `#{command}`.lines
@@ -186,6 +189,10 @@ module Pod
           Process.exit(1)
         end
         UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
+      end
+
+      def get_current_branch
+        `git symbolic-ref --short HEAD`.to_s
       end
 
       # 推送新版本到私有库
