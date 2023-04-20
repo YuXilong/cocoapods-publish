@@ -135,7 +135,22 @@ module Pod
       end
 
       def check_pod_http_source
+        content = File.open(@name).read
+        # 已添加subspec跳过
+        return if content.include?('zip_file_path = s.')
 
+        zip_file_path = <<~CONTENT
+          zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : "repository/files/#\{s.version.to_s}"
+            if use_framework
+        CONTENT
+        content.gsub!('if use_framework', zip_file_path.to_s)
+
+        zip_file_path = <<~CONTENT
+          :http => "https://gitlab.v.show/api/v4/projects/83/#\{zip_file_path}/#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main,"
+        CONTENT
+        content.gsub!(/:http => "https:\/\/gitlab.v.show\/api\/v4\/projects\/(\d+)\/repository\/files\/#\{s.name.to_s}-#\{s.version.to_s}\.zip\/raw\?ref=main,"/, zip_file_path)
+
+        File.open(@name, 'w') {|fw| fw.write(content) }
       end
 
       # 检查当前仓库状态
