@@ -192,7 +192,7 @@ module Pod
       end
 
       def get_current_branch
-        `git symbolic-ref --short HEAD`.to_s
+        `git symbolic-ref --short HEAD`.to_s.chomp
       end
 
       # 推送新版本到私有库
