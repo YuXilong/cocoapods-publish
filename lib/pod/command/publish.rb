@@ -123,6 +123,8 @@ module Pod
         text = File.read(@name)
         text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{@new_version}'")
         File.open(@name, 'w') { |file| file.puts text }
+
+        check_pod_http_source
       end
 
       # 恢复旧版本
@@ -130,6 +132,10 @@ module Pod
         text = File.read(@name)
         text.gsub!("s.version          = '#{@new_version}'", "s.version          = '#{@old_version}'")
         File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      def check_pod_http_source
+
       end
 
       # 检查当前仓库状态
@@ -149,6 +155,8 @@ module Pod
         command = "cd #{@project_path}"
         command += ' && git add .'
         command += " && git commit -m \"[Update] (#{@new_version})\""
+        command += ' && git fetch'
+        command += ' && git pull'
         command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
         command += ' && git push origin main --tags --quiet'
 

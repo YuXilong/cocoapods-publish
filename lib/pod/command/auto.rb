@@ -46,6 +46,9 @@ module Pod
           # 发布beta版本
           @beta_version_auto = argv.flag?('beta', false)
 
+          # 仅打混淆包
+          @only_mixup_auto = argv.flag?('only-mixup', false)
+
           super
         end
 
@@ -66,6 +69,7 @@ module Pod
             args.push('--from-wukong') if @from_wukong
             args.push('--v2') if @use_build_v2
             args.push('--beta') if @beta_version_auto
+            args.push('--only-mixup') if @only_mixup_auto
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
             args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
