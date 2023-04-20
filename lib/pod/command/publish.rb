@@ -148,7 +148,7 @@ module Pod
         content.gsub!('if use_framework', zip_file_path)
 
         zip_file_path = <<~CONTENT
-          #\{zip_file_path}/#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main",
+          #\{zip_file_path}%2F#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main",
         CONTENT
         zip_file_path = zip_file_path.chomp
         content.gsub!(%r{repository/files/#\{s.name.to_s\}-#\{s.version.to_s\}\.zip/raw\?ref=main",}, zip_file_path)
