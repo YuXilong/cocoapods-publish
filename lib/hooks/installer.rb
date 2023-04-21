@@ -29,6 +29,8 @@ module Pod
         name = spec.attributes_hash['name']
         clean_spec(spec)
         if name.start_with?('Core') || name.eql?(spec.root.name)
+          next unless spec.root.source[:git].nil?
+
           spec.root.source = {
             http: spec.root.source[:http],
             type: spec.root.source[:type],
@@ -36,9 +38,14 @@ module Pod
           }
           next
         end
+        http = spec.root.source["http_#{name}".to_sym].to_s
+        if http.empty?
+          http = spec.root.source[:http].to_s
+          http.gsub('BT', name)
+        end
 
         spec.root.source = {
-          http: spec.root.source["http_#{name}".to_sym],
+          http: http,
           type: spec.root.source[:type],
           headers: spec.root.source[:headers]
         }
