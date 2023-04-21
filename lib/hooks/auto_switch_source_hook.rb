@@ -106,21 +106,21 @@ def fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
 
   end
 
-  mixup_libs_map.each do |k, v|
-    Dir.glob("#{cache_root}/Pods/Specs/Release/#{k}/*.podspec.json").each do |file|
-      json = JSON(File.open(file).read)
-      http = json['source']['http']
-      next if http.include?("repository/files/#{v}")
-
-      name = json['name']
-      version = json['version']
-
-      `rm #{file}`
-      Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
-      `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
-      puts "已修正#{k}/#{v}-#{version}缓存"
-    end
-  end
+  # mixup_libs_map.each do |k, v|
+  #   Dir.glob("#{cache_root}/Pods/Specs/Release/#{k}/*.podspec.json").each do |file|
+  #     json = JSON(File.open(file).read)
+  #     http = json['source']['http']
+  #     next if http.include?("repository/files/#{v}")
+  #
+  #     name = json['name']
+  #     version = json['version']
+  #
+  #     `rm #{file}`
+  #     Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
+  #     `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
+  #     puts "已修正#{k}/#{v}-#{version}缓存"
+  #   end
+  # end
 
   Dir.glob("#{cache_root}/Pods/Specs/Release/BT*").each do |file|
     Dir.rmdir(file) if Dir.empty?(file)
