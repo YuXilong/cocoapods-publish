@@ -152,6 +152,16 @@ module Pod
         CONTENT
         zip_file_path = zip_file_path.chomp
         content.gsub!(%r{repository/files/#\{s.name.to_s\}-#\{s.version.to_s\}\.zip/raw\?ref=main",}, zip_file_path)
+
+        content.gsub!(/# 以下为脚本依赖CoreFramework自动生成代码，勿动⚠️⚠️ 如CoreFramework有改动请删除。[\w\W]*?\bend[\w\W]*?end/, '')
+
+        zip_file_path = <<~CONTENT
+          end
+
+            s.subspec
+        CONTENT
+        content.gsub!(/\bend\W*?\bs.subspec/, zip_file_path.chomp)
+
         File.open(@name, 'w') { |fw| fw.write(content) }
       end
 
