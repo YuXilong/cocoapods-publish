@@ -3,7 +3,15 @@ module Pod
 
     def install!
       prepare
+
+      # 屏蔽 "Previous definition" 警告
+      original_verbose = $VERBOSE
+      $VERBOSE = nil
+
       resolve_dependencies
+
+      # 恢复警告级别
+      $VERBOSE = original_verbose
 
       use_framework = ENV['USE_FRAMEWORK']
       check_http_source if use_framework
