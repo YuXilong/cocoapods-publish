@@ -92,7 +92,8 @@ module Pod
       SWIFT_VERSION = `swift --version`.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1].freeze
 
       def swift_version_support?
-        SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
+        content = File.open(@name).read.to_s
+        SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && content.include?("*.swift'")
       end
 
       def version_valid?(version)
