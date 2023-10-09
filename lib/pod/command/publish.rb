@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'English'
 require 'pod/command/auto'
 
 module Pod
@@ -88,10 +89,30 @@ module Pod
         UI.puts "-> #{@name} 验证通过！".green
       end
 
+      SWIFT_VERSION = `swift --version`.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1].freeze
+
+      def swift_version_support?
+        SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
+      end
+
+      def version_valid?(version)
+        `git tag`.to_s.split("\n").include?(version)
+      end
+
       # 增加版本号
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
-        @new_version = increase_number(@old_version)
+        @new_version = @old_version
+        unless version_valid?(@new_version)
+          # 处理Swift版本
+          swift_version = @new_version
+          swift_version = "#{@new_version}.swift-#{SWIFT_VERSION}" if swift_version_support?
+          @new_version = increase_number(@new_version) unless version_valid?(swift_version)
+        end
+
+        # 处理Swift版本
+        @new_version = "#{@new_version}.swift-#{SWIFT_VERSION}" if swift_version_support?
+
         @spec.attributes_hash['version'] = @new_version
       end
 
@@ -118,6 +139,16 @@ module Pod
         end
       end
 
+      def remove_swift_version
+        return nil unless @new_version.include?(".swift")
+
+        @new_version = @new_version.split('.swift')[0]
+        save_new_version_to_podspec
+
+        command = 'git add .'
+        command += " && git commit -m \"[Update] (#{@new_version})\""
+      end
+
       # 保存新版本
       def save_new_version_to_podspec
         text = File.read(@name)
@@ -138,17 +169,23 @@ module Pod
       def check_pod_http_source_publish
         content = File.open(@name).read.to_s
         # 已添加subspec跳过
-        return if content.include?('zip_file_path = s.')
+        return if content.include?("s.version.to_s.include?('.swift')")
+
+        if content.include?('zip_file_path = s.')
+          zip_file_path = <<~CONTENT
+            zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : "repository/files/#\{s.version.to_s}"
+          CONTENT
+          new_zip_file_path = <<~CONTENT
+            zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : s.version.to_s.include?('.swift') ? "repository/files/#\{s.version.to_s.split('.swift')[0]}" : "repository/files/#\{s.version.to_s}"
+          CONTENT
+          content.gsub!(zip_file_path, new_zip_file_path)
+          File.open(@name, 'w') { |fw| fw.write(content) }
+          return
+        end
 
         zip_file_path = <<~CONTENT
-          zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : "repository/files/#\{s.version.to_s}"
+          zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : s.version.to_s.include?('.swift') ? "repository/files/#\{s.version.to_s.split('.swift')[0]}" : "repository/files/#\{s.version.to_s}"
             if use_framework
-        CONTENT
-        zip_file_path = zip_file_path.chomp
-        content.gsub!('if use_framework', zip_file_path)
-
-        zip_file_path = <<~CONTENT
-          #\{zip_file_path}%2F#\{s.name.to_s}-#\{s.version.to_s}.zip/raw?ref=main",
         CONTENT
         zip_file_path = zip_file_path.chomp
         content.gsub!(%r{repository/files/#\{s.name.to_s\}-#\{s.version.to_s\}\.zip/raw\?ref=main",}, zip_file_path)
@@ -190,6 +227,16 @@ module Pod
         # command += ' && git fetch'
         # command += " && git pull origin #{branch}"
         command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
+
+        # 处理Swift版本信息
+        if @new_version.include?(".swift")
+          @new_version = @new_version.split('.swift')[0]
+          save_new_version_to_podspec
+
+          command += '&& git add .'
+          command += " && git commit -m \"[Update] (#{@new_version})\""
+        end
+
         command += " && git push origin #{branch} --tags --quiet"
 
         config.silent = true

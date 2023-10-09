@@ -49,6 +49,9 @@ module Pod
           # 仅打混淆包
           @only_mixup_auto = argv.flag?('only-mixup', false)
 
+          # 发布到GitHub
+          @publish_to_github_auto = argv.flag?('publish-to-github', false)
+
           super
         end
 
@@ -126,7 +129,7 @@ module Pod
             files.each_with_index do |f, i|
               puts "-> #{i + 1}.#{f}".green
             end
-            index = gets.to_i
+            index = gets.chomp.to_i
 
             unless (1...files.count + 1).include?(index)
               puts '-> 输入不正确，请重试！'.red
