@@ -61,6 +61,12 @@ module Pod
             save_new_version_to_podspec
           end
           push_framework_pod
+
+          # 处理Swift版本信息
+          if @new_version.include?('.swift')
+            @new_version = @new_version.split('.swift')[0]
+            save_new_version_to_podspec
+          end
           return
         end
         @project_path = Pathname(@name).parent.to_s
@@ -150,16 +156,6 @@ module Pod
         end
       end
 
-      def remove_swift_version
-        return nil unless @new_version.include?(".swift")
-
-        @new_version = @new_version.split('.swift')[0]
-        save_new_version_to_podspec
-
-        command = 'git add .'
-        command += " && git commit -m \"[Update] (#{@new_version})\""
-      end
-
       # 保存新版本
       def save_new_version_to_podspec
         text = File.read(@name)
@@ -240,7 +236,7 @@ module Pod
         command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
 
         # 处理Swift版本信息
-        if @new_version.include?(".swift")
+        if @new_version.include?('.swift')
           @new_version = @new_version.split('.swift')[0]
           save_new_version_to_podspec
 
