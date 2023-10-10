@@ -6,13 +6,20 @@ module Pod
       # from the internal hash on each access
       #
       class PodfileDependencyCache
-        XCODE_VERSION = `xcodebuild -version`.to_s.split("\n")[0].split(' ')[1].freeze
-        SWIFT_VERSION = `swift --version`.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1].freeze
+        # XCODE_VERSION = `xcodebuild -version`.to_s.split("\n")[0].split(' ')[1].freeze
+
+        # require 'Open3'
+        def local_swift_version
+          _, stdout, _ = Open3.popen3('xcrun swift --version')
+          stdout.gets.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1]
+        end
 
         def initialize(podfile_dependencies, dependencies_by_target_definition)
           @podfile_dependencies = podfile_dependencies
           @dependencies_by_target_definition = dependencies_by_target_definition
           return if ENV['USE_FRAMEWORK'] != '1'
+
+          @swift_version = local_swift_version
           return unless swift_version_support?
 
           # 处理Swift版本
@@ -36,7 +43,7 @@ module Pod
           # 指定Swift版本号
           deps.each do |dep|
             version = dep.requirement.requirements[0][1].to_s
-            version = "#{version}.swift-#{SWIFT_VERSION}"
+            version = "#{version}.swift-#{@swift_version}"
             dep.requirement.requirements[0][1] = Pod::Version.new(version)
           end
         end
@@ -54,7 +61,7 @@ module Pod
         end
 
         def swift_version_support?
-          SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
+          @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
         end
       end
     end

@@ -38,6 +38,8 @@ module Pod
         # 发布beta版本
         @beta_version_publish = argv.flag?('beta', false)
 
+        @swift_version = local_swift_version
+
         super
       end
 
@@ -89,11 +91,15 @@ module Pod
         UI.puts "-> #{@name} 验证通过！".green
       end
 
-      SWIFT_VERSION = `swift --version`.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1].freeze
+      # require 'Open3'
+      def local_swift_version
+        _, stdout, _ = Open3.popen3('xcrun swift --version')
+        stdout.gets.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1]
+      end
 
       def swift_version_support?
         content = File.open(@name).read.to_s
-        SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && content.include?("*.swift'")
+        @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && content.include?("*.swift'")
       end
 
       def version_valid?(version)
@@ -107,12 +113,12 @@ module Pod
         unless version_valid?(@new_version)
           # 处理Swift版本
           swift_version = @new_version
-          swift_version = "#{@new_version}.swift-#{SWIFT_VERSION}" if swift_version_support?
+          swift_version = "#{@new_version}.swift-#{@swift_version}" if swift_version_support?
           @new_version = increase_number(@new_version) unless version_valid?(swift_version)
         end
 
         # 处理Swift版本
-        @new_version = "#{@new_version}.swift-#{SWIFT_VERSION}" if swift_version_support?
+        @new_version = "#{@new_version}.swift-#{@swift_version}" if swift_version_support?
 
         @spec.attributes_hash['version'] = @new_version
       end
