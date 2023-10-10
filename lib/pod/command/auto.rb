@@ -21,7 +21,8 @@ module Pod
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
             %w[--from-wukong 发起者为`wukong`],
             %w[--v2 使用`v2`构建系统],
-            %w[--beta 发布beta版本]
+            %w[--beta 发布beta版本],
+            %w[--upgrade-swift 升级Swift版本]
           ]
         end
 
@@ -52,6 +53,9 @@ module Pod
           # 发布到GitHub
           @publish_to_github_auto = argv.flag?('publish-to-github', false)
 
+          # 升级Swift版本
+          @upgrade_swift_auto = argv.flag?('upgrade-swift', false)
+
           super
         end
 
@@ -72,6 +76,7 @@ module Pod
             args.push('--from-wukong') if @from_wukong
             args.push('--v2') if @use_build_v2
             args.push('--beta') if @beta_version_auto
+            args.push('--upgrade-swift') if @upgrade_swift_auto
             args.push('--only-mixup') if @only_mixup_auto
             args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
             args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
@@ -90,6 +95,7 @@ module Pod
             puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
+            params << '--upgrade-swift' if @upgrade_swift_auto
             argv = CLAide::ARGV.coerce(params)
             Publish.new(argv).run
             end_time = (Time.now.to_f * 1000).to_i
@@ -103,6 +109,7 @@ module Pod
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto
+          params << '--upgrade-swift' if @upgrade_swift_auto
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i

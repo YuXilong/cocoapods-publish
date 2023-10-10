@@ -20,7 +20,8 @@ module Pod
           %w[--sources 指定依赖的组件仓库.],
           %w[--publish-framework 指定发布framework.],
           %w[--from-wukong 发起者为`wukong`],
-          %w[--beta 发布beta版本]
+          %w[--beta 发布beta版本],
+          %w[--upgrade-swift 升级Swift版本]
         ]
       end
 
@@ -37,6 +38,9 @@ module Pod
 
         # 发布beta版本
         @beta_version_publish = argv.flag?('beta', false)
+
+        # 升级Swift版本
+        @upgrade_swift_publish = argv.flag?('upgrade-swift', false)
 
         @swift_version = local_swift_version
 
@@ -94,7 +98,7 @@ module Pod
       # require 'Open3'
       def local_swift_version
         _, stdout, _ = Open3.popen3('xcrun swift --version')
-        stdout.gets.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1]
+        stdout.gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
       end
 
       def swift_version_support?
@@ -102,7 +106,7 @@ module Pod
         @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && content.include?("*.swift'")
       end
 
-      def version_valid?(version)
+      def version_invalid?(version)
         `git tag`.to_s.split("\n").include?(version)
       end
 
@@ -110,11 +114,11 @@ module Pod
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
         @new_version = @old_version
-        unless version_valid?(@new_version)
+        if version_invalid?(@new_version)
           # 处理Swift版本
           swift_version = @new_version
-          swift_version = "#{@new_version}.swift-#{@swift_version}" if swift_version_support?
-          @new_version = increase_number(@new_version) unless version_valid?(swift_version)
+          swift_version = "#{@version}.swift-#{@swift_version}" if swift_version_support? && @upgrade_swift_publish
+          @new_version = increase_number(@new_version) if version_invalid?(swift_version)
         end
 
         # 处理Swift版本

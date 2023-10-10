@@ -11,7 +11,7 @@ module Pod
         # require 'Open3'
         def local_swift_version
           _, stdout, _ = Open3.popen3('xcrun swift --version')
-          stdout.gets.to_s.gsub(/version (\d+\.\d+(\.\d+)?)/).to_a[0].split(' ')[1]
+          stdout.gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
         end
 
         def initialize(podfile_dependencies, dependencies_by_target_definition)
