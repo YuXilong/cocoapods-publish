@@ -64,8 +64,8 @@ module Pod
 
           # 处理Swift版本信息
           if @new_version.include?('.swift')
-            @new_version = @new_version.split('.swift')[0]
-            save_new_version_to_podspec
+            @old_version = @new_version.split('.swift')[0]
+            restore_old_version_to_podspec
           end
           return
         end
@@ -120,6 +120,7 @@ module Pod
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
         @new_version = @old_version
+        @new_version = @new_version.split('.swift')[0] if @new_version.include?('.swift')
         if version_invalid?(@new_version)
           # 处理Swift版本
           swift_version = @new_version
@@ -234,16 +235,6 @@ module Pod
         # command += ' && git fetch'
         # command += " && git pull origin #{branch}"
         command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
-
-        # 处理Swift版本信息
-        if @new_version.include?('.swift')
-          @new_version = @new_version.split('.swift')[0]
-          save_new_version_to_podspec
-
-          command += '&& git add .'
-          command += " && git commit -m \"[Update] (#{@new_version})\""
-        end
-
         command += " && git push origin #{branch} --tags --quiet"
 
         config.silent = true
@@ -256,6 +247,30 @@ module Pod
           restore_old_version_to_podspec
           Process.exit(1)
         end
+
+        # 处理Swift版本信息
+        if @new_version.include?('.swift')
+          old_ver = @old_version
+          @old_version = @new_version.split('.swift')[0]
+          restore_old_version_to_podspec
+
+          command = "git add . && git commit -m \"[Restore] (#{@old_version})\""
+          command += " && git push origin #{branch} --tags --quiet"
+
+          config.silent = true
+          output = `#{command}`.lines
+          UI.puts
+          config.silent = false
+
+          if $?.exitstatus != 0
+            UI.puts "-> #{output}".red
+            UI.puts "-> 恢复版本失败！Command： #{command}".red
+            @old_version = old_ver
+            restore_old_version_to_podspec
+            Process.exit(1)
+          end
+        end
+
         UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
       end
 

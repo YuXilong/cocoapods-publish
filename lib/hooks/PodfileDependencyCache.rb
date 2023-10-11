@@ -43,7 +43,7 @@ module Pod
           # 指定Swift版本号
           deps.each do |dep|
             version = dep.requirement.requirements[0][1].to_s
-            version = "#{version}.swift-#{@swift_version}"
+            version = "#{version}.swift-#{@swift_version}" unless version.include?('.swift')
             dep.requirement.requirements[0][1] = Pod::Version.new(version)
           end
         end
