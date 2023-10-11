@@ -56,17 +56,38 @@ module Pod
       def run
 
         if @publish_framework
-          if @beta_version_publish
-            increase_version_number
-            save_new_version_to_podspec
-          end
+          increase_version_number
+          save_new_version_to_podspec
           push_framework_pod
 
           # 处理Swift版本信息
+          old_ver = @old_version
           if @new_version.include?('.swift')
             @old_version = @new_version.split('.swift')[0]
             restore_old_version_to_podspec
           end
+
+          if @beta_version_publish
+            @new_version = @new_version.split('.swift')[0] if @new_version.include?('.swift')
+
+            branch = get_current_branch
+
+            command = "git add . && git commit -m \"[Beta] (#{@new_version})\""
+            command += " && git push origin #{branch} --quiet"
+
+            config.silent = true
+            output = `#{command}`.lines
+            UI.puts
+            config.silent = false
+
+            if $?.exitstatus != 0
+              UI.puts "-> #{output}".red
+              UI.puts "-> 代码提交失败！Command： #{command}".red
+              @old_version = old_ver
+              restore_old_version_to_podspec
+            end
+          end
+
           return
         end
         @project_path = Pathname(@name).parent.to_s
@@ -112,25 +133,25 @@ module Pod
         @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && content.include?("*.swift'")
       end
 
-      def version_invalid?(version)
-        `git tag`.to_s.split("\n").include?(version)
-      end
-
       # 增加版本号
       def increase_version_number
         @old_version = @spec.attributes_hash['version']
-        @new_version = @old_version
-        @new_version = @new_version.split('.swift')[0] if @new_version.include?('.swift')
-        if version_invalid?(@new_version)
+        version = @old_version
+        version = version.split('.swift')[0] if version.include?('.swift')
+
+        @new_version = increase_number(version) unless @publish_framework
+        if @publish_framework
+          if @upgrade_swift_publish && swift_version_support?
+            @new_version = version
+          else
+            if @beta_version_publish
+              # 自增版本号
+              @new_version = increase_number(version)
+            end
+          end
           # 处理Swift版本
-          swift_version = @new_version
-          swift_version = "#{@version}.swift-#{@swift_version}" if swift_version_support? && @upgrade_swift_publish
-          @new_version = increase_number(@new_version) if version_invalid?(swift_version)
+          @new_version = "#{@new_version}.swift-#{@swift_version}" if swift_version_support?
         end
-
-        # 处理Swift版本
-        @new_version = "#{@new_version}.swift-#{@swift_version}" if swift_version_support?
-
         @spec.attributes_hash['version'] = @new_version
       end
 
@@ -248,29 +269,6 @@ module Pod
           Process.exit(1)
         end
 
-        # 处理Swift版本信息
-        if @new_version.include?('.swift')
-          old_ver = @old_version
-          @old_version = @new_version.split('.swift')[0]
-          restore_old_version_to_podspec
-
-          command = "git add . && git commit -m \"[Restore] (#{@old_version})\""
-          command += " && git push origin #{branch} --tags --quiet"
-
-          config.silent = true
-          output = `#{command}`.lines
-          UI.puts
-          config.silent = false
-
-          if $?.exitstatus != 0
-            UI.puts "-> #{output}".red
-            UI.puts "-> 恢复版本失败！Command： #{command}".red
-            @old_version = old_ver
-            restore_old_version_to_podspec
-            Process.exit(1)
-          end
-        end
-
         UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
       end
 
@@ -314,6 +312,7 @@ module Pod
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = true
         rescue StandardError
+          restore_old_version_to_podspec if @beta_version_publish
           config.silent = false
           UI.puts "-> (#{version})发布失败！".red
           Process.exit(1)

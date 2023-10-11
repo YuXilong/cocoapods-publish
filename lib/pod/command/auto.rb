@@ -89,13 +89,12 @@ module Pod
 
           puts '-> 正在发布...'.yellow if @from_wukong
 
-          unless @beta_version_auto
+          if !@beta_version_auto && !@upgrade_swift_auto
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
-            params << '--upgrade-swift' if @upgrade_swift_auto
             argv = CLAide::ARGV.coerce(params)
             Publish.new(argv).run
             end_time = (Time.now.to_f * 1000).to_i
