@@ -8,21 +8,35 @@ module Pod
 
     # Load and return the dependencies set of the given Pod.
     def find_cached_set(dependency)
-      if dependency.name.start_with?('BT') && dependency.external_source.nil? && !dependency.prerelease? && !dependency.name.include?('/') && swift_version_support?
-        repo = "#{@sources_manager.repos_dir}/BaiTuFrameworkPods"
+      if dependency.name.start_with?('BT') &&
+         dependency.external_source.nil? &&
+         !dependency.prerelease? &&
+         !dependency.name.include?('/') &&
+         swift_version_support?
 
+        # 获取当前的版本号
         version = dependency.requirement.requirements[0][1].to_s
-        if version == '0'
-          # 未指定版本号
-          version = local_framework_version(repo, dependency.name)
-        end
 
-        dependency.requirement.requirements[0][0] = '=' if dependency.requirement.requirements[0][0] != '='
+        # 已自动指定版本号
+        version = modified_frameworks[dependency.name] if modified_frameworks.keys.include?(dependency.name)
 
+        # 未指定版本号
+        version = local_framework_version(dependency.name) if version == '0'
+
+        # 判断是否已指定Swift版本号
         version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
-        dependency.requirement.requirements[0][1] = Pod::Version.new(version)
+
+        # 存储自动指定的版本号
+        modified_frameworks[dependency.name] = version unless modified_frameworks.keys.include?(dependency.name)
+
+        # 重新指定版本
+        dependency.requirement.requirements[0] = ['=', Pod::Version.new(version)]
       end
       origin_find_cached_set(dependency)
+    end
+
+    def modified_frameworks
+      @modified_frameworks ||= {}
     end
 
     def swift_framework?(repo, fw)
@@ -34,10 +48,11 @@ module Pod
       return false if spec_file.nil?
 
       content = File.open(spec_file).read.to_s
-      !content.gsub(/source_files =.*\.swift'/).to_a.empty?
+      !content.gsub(/source_files =.*.swift/).to_a.empty?
     end
 
-    def local_framework_version(repo, fw)
+    def local_framework_version(fw)
+      repo = "#{@sources_manager.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
       folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
 
