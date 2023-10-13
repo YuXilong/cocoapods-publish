@@ -1,7 +1,5 @@
 module Pod
   class Resolver
-
-    # Hook the original `find_cached_set` method.
     alias origin_find_cached_set find_cached_set
 
     SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
@@ -12,6 +10,7 @@ module Pod
          dependency.external_source.nil? &&
          !dependency.prerelease? &&
          !dependency.name.include?('/') &&
+         swift_framework?(dependency.name) &&
          swift_version_support?
 
         # 获取当前的版本号
@@ -32,6 +31,21 @@ module Pod
         # 重新指定版本
         dependency.requirement.requirements[0] = ['=', Pod::Version.new(version)]
       end
+
+      if dependency.name.start_with?('BT') &&
+         dependency.external_source.nil? &&
+         !dependency.prerelease? &&
+         # !dependency.name.include?('/') &&
+         swift_framework?(dependency.name) &&
+         !swift_version_support?
+
+        version = dependency.requirement.requirements[0][1].to_s
+        if version.include?('.swift')
+          version = version.split('.swift')[0]
+          dependency.requirement.requirements[0][1] = Pod::Version.new(version)
+        end
+      end
+
       origin_find_cached_set(dependency)
     end
 
@@ -39,7 +53,9 @@ module Pod
       @modified_frameworks ||= {}
     end
 
-    def swift_framework?(repo, fw)
+    def swift_framework?(fw)
+      fw = fw.split('/')[0] if fw.include?('/')
+      repo = "#{@sources_manager.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
       folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
 

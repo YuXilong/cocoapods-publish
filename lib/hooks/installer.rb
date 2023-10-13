@@ -1,14 +1,37 @@
 module Pod
   class Installer
+    alias origin_resolve_dependencies resolve_dependencies
+    alias origin_initialize initialize
 
-    def install!
-      prepare
+    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
 
+    def initialize(sandbox, podfile, lockfile = nil)
+      origin_initialize(sandbox, podfile, lockfile)
+      # 检测本地Swift版本
+      check_swift_version
+    end
+
+    def check_swift_version
+      lock_file = Pod::Config.instance.lockfile_path.to_s
+      return unless File.exist?(lock_file)
+
+      content = File.read(lock_file)
+      swift_version = SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i
+      return if swift_version >= 59 && content.include?(".swift#{SWIFT_VERSION}")
+
+      # 移除lockfile
+      @lockfile = nil if swift_version >= 59
+
+      # 移除lockfile
+      @lockfile = nil if swift_version < 59 && content.include?('.swift')
+    end
+
+    def resolve_dependencies
       # 屏蔽 "Previous definition" 警告
       original_verbose = $VERBOSE
       $VERBOSE = nil
 
-      resolve_dependencies
+      analyzer = origin_resolve_dependencies
 
       # 恢复警告级别
       $VERBOSE = original_verbose
@@ -16,18 +39,36 @@ module Pod
       use_framework = ENV['USE_FRAMEWORK']
       check_http_source if use_framework
 
-      download_dependencies
-      validate_targets
-      clean_sandbox
-      if installation_options.skip_pods_project_generation?
-        show_skip_pods_project_generation_message
-        run_podfile_post_install_hooks
-      else
-        integrate
-      end
-      write_lockfiles
-      perform_post_install_actions
+      analyzer
     end
+
+    # def install!
+    #   prepare
+    #
+    #   # 屏蔽 "Previous definition" 警告
+    #   original_verbose = $VERBOSE
+    #   $VERBOSE = nil
+    #
+    #   resolve_dependencies
+    #
+    #   # 恢复警告级别
+    #   $VERBOSE = original_verbose
+    #
+    #   use_framework = ENV['USE_FRAMEWORK']
+    #   check_http_source if use_framework
+    #
+    #   download_dependencies
+    #   validate_targets
+    #   clean_sandbox
+    #   if installation_options.skip_pods_project_generation?
+    #     show_skip_pods_project_generation_message
+    #     run_podfile_post_install_hooks
+    #   else
+    #     integrate
+    #   end
+    #   write_lockfiles
+    #   perform_post_install_actions
+    # end
 
     private
 
