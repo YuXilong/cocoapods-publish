@@ -53,7 +53,12 @@ module Pod
       @modified_frameworks ||= {}
     end
 
+    FW_EXCLUDE_NAMES = %w[BTDContext BTAssets]
     def swift_framework?(fw)
+
+      # 过滤白名单
+      return false unless FW_EXCLUDE_NAMES.filter { |name| fw.include?(name) }.empty?
+
       fw = fw.split('/')[0] if fw.include?('/')
       repo = "#{@sources_manager.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
