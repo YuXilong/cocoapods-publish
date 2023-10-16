@@ -6,46 +6,57 @@ module Pod
 
     # Load and return the dependencies set of the given Pod.
     def find_cached_set(dependency)
-      if dependency.name.start_with?('BT') &&
-         dependency.external_source.nil? &&
-         !dependency.prerelease? &&
-         !dependency.name.include?('/') &&
-         swift_framework?(dependency.name) &&
-         swift_version_support?
+      version_changed = ''
+      # if dependency.name.start_with?('BT') &&
+      #    dependency.external_source.nil? &&
+      #    !dependency.prerelease? &&
+      #    !dependency.name.include?('/') &&
+      #    swift_framework?(dependency.name) &&
+      #    swift_version_support?
+      #
+      #   # 获取当前的版本号
+      #   version = dependency.requirement.requirements[0][1].to_s
+      #
+      #   # 已自动指定版本号
+      #   version = modified_frameworks[dependency.name] if modified_frameworks.keys.include?(dependency.name)
+      #
+      #   # 未指定版本号
+      #   version = local_framework_version(dependency.name) if version == '0'
+      #
+      #   # 判断是否已指定Swift版本号
+      #   version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
+      #
+      #   # 存储自动指定的版本号
+      #   modified_frameworks[dependency.name] = version unless modified_frameworks.keys.include?(dependency.name)
+      #
+      #   # 重新指定版本
+      #   dependency.requirement.requirements[0] = ['=', Pod::Version.new(version)]
+      #   version_changed = version
+      # end
+      #
+      # if dependency.name.start_with?('BT') &&
+      #    dependency.external_source.nil? &&
+      #    !dependency.prerelease? &&
+      #    # !dependency.name.include?('/') &&
+      #    swift_framework?(dependency.name) &&
+      #    !swift_version_support?
+      #
+      #   version = dependency.requirement.requirements[0][1].to_s
+      #   if version.include?('.swift')
+      #     version = version.split('.swift')[0]
+      #     dependency.requirement.requirements[0][1] = Pod::Version.new(version)
+      #     version_changed = version
+      #   end
+      # end
 
-        # 获取当前的版本号
-        version = dependency.requirement.requirements[0][1].to_s
-
-        # 已自动指定版本号
-        version = modified_frameworks[dependency.name] if modified_frameworks.keys.include?(dependency.name)
-
-        # 未指定版本号
-        version = local_framework_version(dependency.name) if version == '0'
-
-        # 判断是否已指定Swift版本号
-        version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
-
-        # 存储自动指定的版本号
-        modified_frameworks[dependency.name] = version unless modified_frameworks.keys.include?(dependency.name)
-
-        # 重新指定版本
-        dependency.requirement.requirements[0] = ['=', Pod::Version.new(version)]
-      end
-
-      if dependency.name.start_with?('BT') &&
-         dependency.external_source.nil? &&
-         !dependency.prerelease? &&
-         # !dependency.name.include?('/') &&
-         swift_framework?(dependency.name) &&
-         !swift_version_support?
-
-        version = dependency.requirement.requirements[0][1].to_s
-        if version.include?('.swift')
-          version = version.split('.swift')[0]
-          dependency.requirement.requirements[0][1] = Pod::Version.new(version)
-        end
-      end
-
+      # dependency.covert_swift_necessnary
+      # set = origin_find_cached_set(dependency)
+      #
+      # unless version_changed.empty?
+      #   set.sources[0].instance_variable_get(:@versions_by_name)[dependency.name] = [Pod::Version.new(version_changed)]
+      # end
+      #
+      # set
       origin_find_cached_set(dependency)
     end
 

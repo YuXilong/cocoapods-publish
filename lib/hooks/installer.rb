@@ -2,10 +2,15 @@ module Pod
   class Installer
     alias origin_resolve_dependencies resolve_dependencies
     alias origin_initialize initialize
+    alias origin_integrate_user_project integrate_user_project
 
     SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
 
     def initialize(sandbox, podfile, lockfile = nil)
+      # podfile.dependencies.each { |dep| dep.covert_swift_necessnary }
+      # config.podfile.dependencies.each { |dep| dep.covert_swift_necessnary }
+      #
+
       origin_initialize(sandbox, podfile, lockfile)
       # 检测本地Swift版本
       check_swift_version
@@ -40,6 +45,12 @@ module Pod
       check_http_source if use_framework
 
       analyzer
+    end
+
+    def integrate_user_project
+      res = origin_integrate_user_project
+      $VERBOSE = nil
+      res
     end
 
     # def install!
