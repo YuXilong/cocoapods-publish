@@ -63,8 +63,17 @@ module Pod
       return false if fw.nil?
       # 过滤白名单
       return false unless FW_EXCLUDE_NAMES.filter { |name| fw.include?(name) }.empty?
+
       podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
-      return false unless File.read(podfile_path).to_s.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
+      if File.exist?(podfile_path)
+        return false unless File.read(podfile_path).to_s.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
+      else
+        deps = Pod::Config.instance.podfile.to_hash['target_definitions'][0]['children'][0]['dependencies']
+        if deps.keys.include?(fw) && !deps[fw].empty?
+          h = deps[fw][0]
+          return false if h.is_a?(Hash) && !h[:path].nil? && h[:dev] == 1
+        end
+      end
 
       fw = fw.split('/')[0] if fw.include?('/')
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
