@@ -81,7 +81,8 @@ module Pod
       folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
-      spec_file = folder_paths.min_by { |folder| -File.mtime(folder).to_i }
+      # spec_file = folder_paths.max_by { |folder| `cd #{repo} && git log --reverse --pretty=format:"%ad" -- .#{folder.gsub(repo, '')} | tail -n 1` }
+      spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
       return false if spec_file.nil?
 
       content = File.open(spec_file).read.to_s
@@ -99,11 +100,6 @@ module Pod
 
       spec = Specification.from_file(spec_file)
       spec.attributes_hash['version']
-    end
-
-    def local_swift_version
-      _, stdout, _ = Open3.popen3('swift --version')
-      stdout.gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
     end
 
     def swift_version_support?
