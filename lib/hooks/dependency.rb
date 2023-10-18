@@ -3,15 +3,23 @@ module Pod
     SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
     alias origin_initialize initialize
 
+    # 混淆支持
+    FW_MIXUP_SUPPORT = %w[VO MNL PPL ZSL PAS].freeze
+
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
 
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
-         !name.include?('/') &&
          swift_framework?(name) &&
          swift_version_support?
-        requirements = [genrate_requirements(name, requirements)]
+        if name.include?('/')
+          unless FW_MIXUP_SUPPORT.filter { |prefix| name.include?("/#{prefix}") }.empty?
+            requirements = [genrate_requirements(name, requirements)]
+          end
+        else
+          requirements = [genrate_requirements(name, requirements)]
+        end
       end
 
       if name.start_with?('BT') &&
@@ -61,7 +69,7 @@ module Pod
       @modified_frameworks ||= {}
     end
 
-    FW_EXCLUDE_NAMES = %w[BTDContext BTAssets]
+    FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
     def swift_framework?(fw)
       return false if fw.nil?
       # 过滤白名单
