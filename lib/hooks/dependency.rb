@@ -27,6 +27,8 @@ module Pod
     def genrate_requirements(name, requirements)
       return requirements if requirements.empty?
 
+      puts "-> 安装依赖前：#{name}, requirements:#{requirements}"
+
       # 获取当前的版本号
       version = requirements[0]
 
@@ -42,6 +44,7 @@ module Pod
       # 存储自动指定的版本号
       modified_frameworks[name] = version unless modified_frameworks.keys.include?(name)
 
+      puts "-> 安装依赖后：#{name}, requirements:#{version}"
       # 重新指定版本
       version
     end
@@ -86,13 +89,13 @@ module Pod
       return false if spec_file.nil?
 
       content = File.open(spec_file).read.to_s
-      !content.gsub(/source_files =.*.swift/).to_a.empty?
+      !content.gsub(/source_files.*=.*.swift/).to_a.empty?
     end
 
     def local_framework_version(fw)
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
+      folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
       spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }

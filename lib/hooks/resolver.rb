@@ -80,7 +80,7 @@ module Pod
       return false if spec_file.nil?
 
       content = File.open(spec_file).read.to_s
-      !content.gsub(/source_files =.*.swift/).to_a.empty?
+      !content.gsub(/source_files.*=.*.swift/).to_a.empty?
     end
 
     def local_framework_version(fw)

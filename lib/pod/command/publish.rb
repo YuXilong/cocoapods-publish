@@ -130,7 +130,7 @@ module Pod
 
       def swift_version_support?
         content = File.open(@name).read.to_s
-        @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && !content.gsub(/source_files =.*.swift/).to_a.empty?
+        @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && !content.gsub(/source_files.*=.*.swift/).to_a.empty?
       end
 
       # 增加版本号
