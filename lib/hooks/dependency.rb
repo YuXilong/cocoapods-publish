@@ -95,7 +95,7 @@ module Pod
       folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
-      spec_file = folder_paths.min_by { |folder| -File.mtime(folder).to_i }
+      spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
       return [] if spec_file.nil?
 
       spec = Specification.from_file(spec_file)
