@@ -27,7 +27,7 @@ module Pod
     def genrate_requirements(name, requirements)
       return requirements if requirements.empty?
 
-      puts "-> 安装依赖前：#{name}, requirements:#{requirements}"
+      # puts "-> 安装依赖前：#{name}, requirements:#{requirements}"
 
       # 获取当前的版本号
       version = requirements[0]
@@ -44,7 +44,7 @@ module Pod
       # 存储自动指定的版本号
       modified_frameworks[name] = version unless modified_frameworks.keys.include?(name)
 
-      puts "-> 安装依赖后：#{name}, requirements:#{version}"
+      # puts "-> 安装依赖后：#{name}, requirements:#{version}"
       # 重新指定版本
       version
     end
