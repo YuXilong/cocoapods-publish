@@ -14,8 +14,8 @@ module Pod
          swift_framework?(name) &&
          swift_version_support?
         if name.include?('/')
-          unless FW_MIXUP_SUPPORT.filter { |prefix| name.include?("/#{prefix}") }.empty?
-            requirements = [genrate_requirements(name, requirements)]
+          unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{name.split('/')[0]}/#{prefix}" }.empty?
+            requirements = [genrate_requirements(name.split('/')[0], requirements)]
           end
         else
           requirements = [genrate_requirements(name, requirements)]
