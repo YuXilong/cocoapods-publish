@@ -77,7 +77,9 @@ module Pod
 
       podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
       if File.exist?(podfile_path)
-        return false unless File.read(podfile_path).to_s.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
+        content = File.read(podfile_path).to_s
+        content.gsub!(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
+        return false unless content.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
       else
         deps = Pod::Config.instance.podfile.to_hash['target_definitions'][0]['children'][0]['dependencies']
         if deps.keys.include?(fw) && !deps[fw].empty?
