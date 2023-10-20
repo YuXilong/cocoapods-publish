@@ -6,6 +6,7 @@ module Pod
 
       GITLAB_API = 'https://gitlab.v.show/api/v4/'.freeze
       GITLAB_GROUP_ID = '26'.freeze
+      GITLAB_VI_GROUP_ID = '520'.freeze
       GITLAB_TOKEN = (ENV['GIT_LAB_TOKEN']).to_s.freeze
 
       GET = 0
@@ -18,7 +19,9 @@ module Pod
       end
 
       def project_id
-        response = send_request(GET, "/groups/#{GITLAB_GROUP_ID}")
+        response = send_request(GET, "/groups/#{GITLAB_VI_GROUP_ID}") if @spec.name.include?('Vietnam')
+        response = send_request(GET, "/groups/#{GITLAB_GROUP_ID}") unless @spec.name.include?('Vietnam')
+
         projects = response['projects']
         unless projects.select! { |p| p['name'].eql?(@spec.name) }.empty?
           UI.puts '-> 获取远程仓库信息成功！'.green unless @from_wukong
@@ -29,11 +32,13 @@ module Pod
       end
 
       def create_project
+        namespace_id = GITLAB_GROUP_ID
+        namespace_id = GITLAB_VI_GROUP_ID if @spec.name.include?('Vietnam')
         params = {
           'name': @spec.name,
           'description': @spec.attributes_hash['summary'],
           'path': @spec.name,
-          'namespace_id': GITLAB_GROUP_ID,
+          'namespace_id': namespace_id,
           'initialize_with_readme': false
         }
         response = send_request(POST, 'projects/', params)
