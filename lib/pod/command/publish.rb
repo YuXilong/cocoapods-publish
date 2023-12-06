@@ -44,6 +44,9 @@ module Pod
 
         @swift_version = local_swift_version
 
+        # 发布到GitHub源码
+        @to_github = argv.flag?('to-github', false)
+
         super
       end
 
@@ -54,6 +57,11 @@ module Pod
       end
 
       def run
+
+        if @to_github
+          push_pod_to_github
+          return
+        end
 
         if @publish_framework
           increase_version_number
@@ -128,6 +136,7 @@ module Pod
         stdout.gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
       end
 
+      FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
       def swift_version_support?
         content = File.open(@name).read.to_s
         @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && !content.gsub(/source_files.*=.*.swift/).to_a.empty?
@@ -141,6 +150,7 @@ module Pod
         @new_version = version
 
         @new_version = increase_number(version) unless @publish_framework
+        # TODO: 适配仅源码模式
         if @publish_framework
           if @upgrade_swift_publish && swift_version_support?
             @new_version = version
@@ -304,6 +314,27 @@ module Pod
         UI.puts "-> 正在发布新版本(#{version})...".yellow unless @from_wukong
         config.silent = true
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
+        begin
+          command = Repo::Push::PushWithoutValid.new(argv)
+          command.run
+          command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
+          command.run
+          config.silent = false
+          UI.puts "-> (#{version})发布成功！".green unless @from_wukong
+          config.silent = true
+        rescue StandardError
+          restore_old_version_to_podspec if @beta_version_publish
+          config.silent = false
+          UI.puts "-> (#{version})发布失败！".red
+          Process.exit(1)
+        end
+      end
+
+      def push_pod_to_github
+        version = @spec.attributes_hash['version']
+        UI.puts "-> 正在发布新版本(#{version})...".yellow unless @from_wukong
+        config.silent = true
+        argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', '--sources=trunk'])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
