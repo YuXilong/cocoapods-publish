@@ -1,13 +1,10 @@
 module Pod
   class Dependency
-    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
+    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
     alias origin_initialize initialize
 
     # 混淆支持
     FW_MIXUP_SUPPORT = %w[VO MNL PPL ZSL PAS].freeze
-
-    # 是否使用二进制模式
-    USE_FRAMEWORK = ENV['USE_FRAMEWORK'] == '1'
 
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?

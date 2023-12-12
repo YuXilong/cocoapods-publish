@@ -133,11 +133,15 @@ module Pod
       # require 'Open3'
       def local_swift_version
         _, stdout, _ = Open3.popen3('xcrun swift --version')
-        stdout.gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
+        stdout.gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
       end
 
       FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
       def swift_version_support?
+        name = @spec.attributes_hash['version']
+        # 过滤白名单
+        return false unless FW_EXCLUDE_NAMES.filter { |nm| name.include?(nm) }.empty?
+
         content = File.open(@name).read.to_s
         @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && !content.gsub(/source_files.*=.*.swift/).to_a.empty?
       end

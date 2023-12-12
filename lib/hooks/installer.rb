@@ -4,7 +4,7 @@ module Pod
     alias origin_initialize initialize
     alias origin_integrate_user_project integrate_user_project
 
-    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
+    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
 
     def initialize(sandbox, podfile, lockfile = nil)
       # podfile.dependencies.each { |dep| dep.covert_swift_necessnary }

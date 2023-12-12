@@ -72,7 +72,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
 end
 
-SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+\.\d+?)/).to_a[0].split(' ')[1]
+SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
 
 # 检测本地Swift版本
 def check_swift_version
