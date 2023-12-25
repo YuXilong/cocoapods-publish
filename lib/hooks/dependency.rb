@@ -40,8 +40,13 @@ module Pod
       # 获取当前的版本号
       version = requirements[0]
 
+      # 其它地方已指定版本号，本次不自动指定版本号，比如在podspec中依赖通常不指定版本号 在podfile中会指定对应的版本号
+      return requirements if version.is_a?(Array) && Dependency.specified_framework_versions.keys.include?(name)
+
       # 已自动指定版本号
-      version = modified_frameworks[name] if modified_frameworks.keys.include?(name)
+      version = Dependency.modified_frameworks[name] if Dependency.modified_frameworks.keys.include?(name)
+
+      is_specified = !version.is_a?(Array)
 
       # 未指定版本号
       version = local_framework_version(name) if version.is_a?(Array)
@@ -50,7 +55,10 @@ module Pod
       version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
 
       # 存储自动指定的版本号
-      modified_frameworks[name] = version unless modified_frameworks.keys.include?(name)
+      Dependency.modified_frameworks[name] = version unless Dependency.modified_frameworks.keys.include?(name)
+
+      # 存储已指定的版本号
+      Dependency.specified_framework_versions[name] = version if is_specified && !Dependency.specified_framework_versions.keys.include?(name)
 
       # puts "-> 安装依赖后：#{name}, requirements:#{version}"
       # 重新指定版本
@@ -65,8 +73,12 @@ module Pod
       version
     end
 
-    def modified_frameworks
-      @modified_frameworks ||= {}
+    def self.modified_frameworks
+      @@modified_frameworks ||= {}
+    end
+
+    def self.specified_framework_versions
+      @@specified_framework_versions ||= {}
     end
 
     FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
