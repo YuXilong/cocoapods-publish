@@ -138,7 +138,7 @@ module Pod
 
       FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
       def swift_version_support?
-        name = @spec.attributes_hash['version']
+        name = @spec.attributes_hash['name']
         # 过滤白名单
         return false unless FW_EXCLUDE_NAMES.filter { |nm| name.include?(nm) }.empty?
 
