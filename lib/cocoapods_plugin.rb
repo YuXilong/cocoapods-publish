@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+$VERBOSE = nil
 require 'pod/command/publish'
 require 'cocoapods-publish/pod_utils'
 require 'cocoapods-publish/podfile_dsl'

@@ -9,8 +9,9 @@ module Pod
     def initialize(sandbox, podfile, lockfile = nil)
       # podfile.dependencies.each { |dep| dep.covert_swift_necessnary }
       # config.podfile.dependencies.each { |dep| dep.covert_swift_necessnary }
-      #
 
+      # 多仓库同名称警告关闭
+      podfile.installation_options.warn_for_multiple_pod_sources = false
       origin_initialize(sandbox, podfile, lockfile)
       # 检测本地Swift版本
       check_swift_version
@@ -80,6 +81,39 @@ module Pod
     #   write_lockfiles
     #   perform_post_install_actions
     # end
+
+    alias origin_clean_sandbox clean_sandbox
+    def clean_sandbox
+      unless @sandbox.development_pods.empty?
+        # 存储本地依赖
+        @sandbox.development_pods.each_key do |name|
+          file = Dir.glob("#{@sandbox.root}/**/*#{name}*.json").first
+          FileUtils.copy_file(file, "#{file}.bak") if file
+        end
+      end
+      origin_clean_sandbox
+
+      unless @sandbox.development_pods.empty?
+        # 恢复本地依赖
+        @sandbox.development_pods.each_key do |name|
+          file = Dir.glob("#{@sandbox.root}/**/*#{name}*.json.bak").first
+          File.rename(file, file.gsub('.bak', '')) if file
+        end
+      end
+    end
+
+    alias origin_write_lockfiles write_lockfiles
+    def write_lockfiles
+      origin_write_lockfiles
+
+      unless @sandbox.development_pods.empty?
+        # 移除本地依赖
+        @sandbox.development_pods.each_key do |name|
+          file = Dir.glob("#{@sandbox.root}/**/*#{name}*.json").first
+          FileUtils.remove_file(file) if file
+        end
+      end
+    end
 
     private
 
