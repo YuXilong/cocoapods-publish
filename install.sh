@@ -21,10 +21,10 @@ curl -L "$url" -o $des
 # chmod +x /usr/local/bin/wukong
 chmod +x $des
 
-cp "$des" /usr/local/bin
+# cp "$des" /usr/local/bin
 
 echo '- Installation successful!'
 
 # 更新本地cocoapods插件
-wukong update
-wukong update --pod-plugins
+./wukong update
+./wukong update --pod-plugins
