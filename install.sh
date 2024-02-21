@@ -20,8 +20,12 @@ if [ "${arch}" == "x86_64" ]; then
 fi
 
 # 从github下载到/usr/local/bin
-curl -L "$url" -o /usr/local/bin/wukong
-chmod +x /usr/local/bin/wukong
+# curl -L "$url" -o /usr/local/bin/wukong
+curl -L "$url" -o ~/wukong
+# chmod +x /usr/local/bin/wukong
+chmod +x ~/wukong
+
+cp ~/wukong /usr/local/bin/wukong
 
 echo '- Installation successful!'
 
