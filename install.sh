@@ -21,7 +21,7 @@ curl -L "$url" -o $des
 # chmod +x /usr/local/bin/wukong
 chmod +x $des
 
-cp $des /usr/local/bin/wukong
+cp $des /usr/local/bin/
 
 echo '- Installation successful!'
 
