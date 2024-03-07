@@ -117,7 +117,7 @@ module Pod
     def local_framework_version(fw)
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
+      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
       spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
