@@ -326,10 +326,10 @@ module Pod
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = true
-        rescue StandardError
+        rescue StandardError => e
           restore_old_version_to_podspec if @beta_version_publish
           config.silent = false
-          UI.puts "-> (#{version})发布失败！".red
+          UI.puts "-> (#{version})发布失败：#{e.message}".red
           Process.exit(1)
         end
       end
@@ -347,10 +347,10 @@ module Pod
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = true
-        rescue StandardError
+        rescue StandardError => e
           restore_old_version_to_podspec if @beta_version_publish
           config.silent = false
-          UI.puts "-> (#{version})发布失败！".red
+          UI.puts "-> (#{version})发布失败：#{e.message}".red
           Process.exit(1)
         end
       end
