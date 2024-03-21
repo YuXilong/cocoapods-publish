@@ -22,7 +22,7 @@ read -p "已安装wukong-server，是否更新? (y/n): " choice
 
 # 根据用户的选择决定是否继续执行
 case "$choice" in
-  y|Y ) install_wukong_server;
+  y|Y ) install_wukong_server;;
   n|N ) exit;;
   * ) exit;;
 esac
