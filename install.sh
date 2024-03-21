@@ -36,9 +36,9 @@ install_wukong() {
     # 安装WuKong
     echo '- Installing WuKong...'
     arch="$(uname -m)"
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_1.2.2"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.0.1"
     if [ "${arch}" == "x86_64" ]; then
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_1.2.2"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.0.1"
     fi
     des="/opt/homebrew/opt/ruby/bin/wukong"
     curl -L "$url" -o $des
