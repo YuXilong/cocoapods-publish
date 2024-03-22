@@ -53,6 +53,21 @@ install_wukong() {
     pod repo update BaiTuFrameworkPods
 }
 
+# 更新WuKong
+update_wukong() {
+    # 安装WuKong
+    echo '- Installing WuKong...'
+    arch="$(uname -m)"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.0.2"
+    if [ "${arch}" == "x86_64" ]; then
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.0.2"
+    fi
+    des="/opt/homebrew/opt/ruby/bin/wukong"
+    curl -L "$url" -o $des
+    chmod +x $des
+    echo '- Installation successful!'
+}
+
 if ! command -v brew &> /dev/null; then
     install_homebrew
     upgrade_ruby
@@ -61,3 +76,16 @@ fi
 if ! command -v wukong &> /dev/null; then
     install_wukong
 fi
+
+# 提示用户是否继续执行
+read -p "已安装wukong，是否更新? (y/n): " choice
+
+# 根据用户的选择决定是否继续执行
+case "$choice" in
+( y|Y ) 
+    update_wukong;;
+( n|N ) 
+    exit;;
+( * ) 
+    exit;;
+esac
