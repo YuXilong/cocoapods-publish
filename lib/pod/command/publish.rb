@@ -63,6 +63,11 @@ module Pod
           return
         end
 
+        @current_branch = get_current_branch
+        @pod_name = @spec.attributes_hash['name']
+
+        @is_version_need_attach_branch = @pod_name == 'BTAssets' && @current_branch != 'main'
+
         if @publish_framework
           increase_version_number
           save_new_version_to_podspec
@@ -74,6 +79,8 @@ module Pod
             @old_version = @new_version.split('.swift')[0]
             restore_old_version_to_podspec
           end
+
+          restore_old_version_to_podspec if @is_version_need_attach_branch
 
           if @beta_version_publish
             @new_version = @new_version.split('.swift')[0] if @new_version.include?('.swift')
@@ -105,6 +112,7 @@ module Pod
         save_new_version_to_podspec
         check_repo_status
         push_pods
+
       end
 
       # 验证.podspec 执行 pod lib lint xxx.podspec
@@ -151,9 +159,12 @@ module Pod
         @old_version = @spec.attributes_hash['version']
         version = @old_version
         version = version.split('.swift')[0] if version.include?('.swift')
+        version = version.split(".#{@current_branch}")[0] if version.include?(".#{@current_branch}")
         @new_version = version
 
         @new_version = increase_number(version) unless @publish_framework
+        @new_version = "#{@new_version}.#{@current_branch.upcase}" if @is_version_need_attach_branch
+
         # TODO: 适配仅源码模式
         if @publish_framework
           if @upgrade_swift_publish && swift_version_support?
@@ -285,6 +296,29 @@ module Pod
         end
 
         UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
+      end
+
+      def push_sources
+        UI.puts '-> 推送代码...'.yellow unless @from_wukong
+        branch = get_current_branch
+
+        command = "cd #{@project_path}"
+        command += ' && git add .'
+        command += " && git commit -m \"[Update] (#{@new_version})\""
+        command += " && git push origin #{branch} --quiet"
+
+        config.silent = true
+        output = `#{command}`.lines
+        UI.puts
+        config.silent = false
+        if $?.exitstatus != 0
+          UI.puts "-> #{output}".red
+          UI.puts "-> 代码推送失败！Command： #{command}".red
+          restore_old_version_to_podspec
+          Process.exit(1)
+        end
+
+        UI.puts '-> 推送代码成功！'.green unless @from_wukong
       end
 
       def get_current_branch
