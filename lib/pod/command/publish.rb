@@ -63,10 +63,10 @@ module Pod
           return
         end
 
-        @current_branch = get_current_branch
+        @current_branch = get_current_branch.upcase
         @pod_name = @spec.attributes_hash['name']
 
-        @is_version_need_attach_branch = @pod_name == 'BTAssets' && @current_branch != 'main'
+        @is_version_need_attach_branch = @pod_name == 'BTAssets' && @current_branch != 'MAIN'
 
         if @publish_framework
           increase_version_number
@@ -163,7 +163,7 @@ module Pod
         @new_version = version
 
         @new_version = increase_number(version) unless @publish_framework
-        @new_version = "#{@new_version}.#{@current_branch.upcase}" if @is_version_need_attach_branch
+        @new_version = "#{@new_version}.#{@current_branch}" if @is_version_need_attach_branch
 
         # TODO: 适配仅源码模式
         if @publish_framework
