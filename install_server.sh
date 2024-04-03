@@ -7,6 +7,10 @@ install_wukong_server() {
     # 安装WuKong
     echo '- Installing wukong-server...'
     url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong-server"
+    arch="$(uname -m)"
+    if [ "${arch}" == "x86_64" ]; then
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong-server_i386"
+    fi
     des="/opt/homebrew/bin/wukong-server"
     curl -L "$url" -o $des
     chmod +x $des
