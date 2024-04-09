@@ -65,6 +65,12 @@ module Pod
           @podspec_root ||= Dir.pwd
           @podspec = find_podspec_file
 
+          if @beta_version_auto && get_current_branch == 'main'
+            puts 'main分支不支持发布Beta组件！'.red if @from_wukong
+            puts '-> main分支不支持发布Beta组件！'.red unless @from_wukong
+            Process.exit(1)
+          end
+
           # 打包
           unless @skip_package
             puts '-> 正在生成二进制...'.yellow unless @from_wukong
@@ -115,6 +121,10 @@ module Pod
           duration = end_time - begin_time
           puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]".green
           puts '-> 发布完成'.green unless @from_wukong
+        end
+
+        def get_current_branch
+          `git symbolic-ref --short HEAD`.to_s.chomp
         end
 
         # 自动查找当前目前的podspec文件
