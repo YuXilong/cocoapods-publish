@@ -22,7 +22,8 @@ module Pod
             %w[--from-wukong 发起者为`wukong`],
             %w[--v2 使用`v2`构建系统],
             %w[--beta 发布beta版本],
-            %w[--upgrade-swift 升级Swift版本]
+            %w[--upgrade-swift 升级Swift版本],
+            %w[--continue-from-upload 从上传任务恢复发布]
           ]
         end
 
@@ -56,6 +57,9 @@ module Pod
           # 升级Swift版本
           @upgrade_swift_auto = argv.flag?('upgrade-swift', false)
 
+          # 从上传任务恢复
+          @continue_from_upload_auto = argv.flag?('continue-from-upload', false)
+
           super
         end
 
@@ -71,11 +75,11 @@ module Pod
             Process.exit(1)
           end
 
-          # 打包
-          unless @skip_package
-            puts '-> 正在生成二进制...'.yellow unless @from_wukong
+          if @continue_from_upload_auto
+            puts '-> 正在恢复上传版本...'.yellow
 
             args = [@podspec]
+            args.push('--continue-from-upload') if @continue_from_upload_auto
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
             args.push('--mixup') if @mixup
@@ -90,7 +94,29 @@ module Pod
 
             argv = CLAide::ARGV.coerce(args)
             Pod::Command::Package.new(argv).run
-            puts '-> 二进制生成成功！'.yellow unless @from_wukong
+            puts '-> 恢复上传成功！'.yellow unless @from_wukong
+          else
+            # 打包
+            unless @skip_package
+              puts '-> 正在生成二进制...'.yellow unless @from_wukong
+
+              args = [@podspec]
+              args.push('--local', '--no-show-tips') if @local
+              args.push('--clean-cache') if @clean_cache
+              args.push('--mixup') if @mixup
+              args.push('--from-wukong') if @from_wukong
+              args.push('--v2') if @use_build_v2
+              args.push('--beta') if @beta_version_auto
+              args.push('--upgrade-swift') if @upgrade_swift_auto
+              args.push('--only-mixup') if @only_mixup_auto
+              args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
+              args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
+              args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
+
+              argv = CLAide::ARGV.coerce(args)
+              Pod::Command::Package.new(argv).run
+              puts '-> 二进制生成成功！'.yellow unless @from_wukong
+            end
           end
 
           puts '-> 正在发布...'.yellow if @from_wukong
