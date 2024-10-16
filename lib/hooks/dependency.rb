@@ -51,6 +51,8 @@ module Pod
       # 未指定版本号
       version = local_framework_version(name) if version.is_a?(Array)
 
+      return version if version.is_a?(Array)
+
       # 判断是否已指定Swift版本号
       version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
 

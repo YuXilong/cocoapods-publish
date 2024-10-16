@@ -172,13 +172,12 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
   # 添加源码私有源 && 二进制私有源 ssh://git@gitlab.v.show:1022/ios_framework/frameworkpods.git ssh://git@gitlab.v.show:1022/ios_component/baitupods.git
   added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git https://github.com/BaiTu-iOS/baitu-specs.git https://github.com/aliyun/aliyun-specs.git]
   added_sources << if use_framework
-    'http://gitlab.v.show/ios_framework/frameworkpods.git'
+                     'http://gitlab.v.show/ios_framework/frameworkpods.git'
                    else
-    'http://gitlab.v.show/ios_component/baitupods.git'
+                     'http://gitlab.v.show/ios_component/baitupods.git'
                    end
   added_sources.each { |source| context.add_source(sources_manger.source_with_name_or_url(source)) }
 end
-
 
 # Pod::HooksManager.register('cocoapods-publish', :post_install) do |context, _|
 #   project_pods_root = Pod::Config.instance.project_pods_root.to_s
@@ -203,19 +202,19 @@ def process_file(pods_root, xc_name)
   Dir.glob("#{pods_root}/**/AgoraRtcEngine_Special_iOS-xcframeworks.sh").each do |file|
     contents = File.open(file).read
     contents.gsub!("install_xcframework \"${PODS_ROOT}/AgoraRtcEngine_Special_iOS/#{xc_name}\" \"AgoraRtcEngine_Special_iOS\" \"framework\" \"ios-arm64_armv7\" \"ios-arm64_x86_64-simulator\"", '')
-    File.open(file, 'w') {|f| f.write(contents) }
+    File.open(file, 'w') { |f| f.write(contents) }
   end
 
   Dir.glob("#{pods_root}/**/AgoraRtcEngine_Special_iOS-xcframeworks-output-files.xcfilelist").each do |file|
     contents = File.open(file).read
     contents.gsub!("${PODS_XCFRAMEWORKS_BUILD_DIR}/AgoraRtcEngine_Special_iOS/#{xc_name.split('.')[0]}.framework", '')
-    File.open(file, 'w') {|f| f.write(contents) }
+    File.open(file, 'w') { |f| f.write(contents) }
   end
 
   Dir.glob("#{pods_root}/**/AgoraRtcEngine_Special_iOS-xcframeworks-input-files.xcfilelist").each do |file|
     contents = File.open(file).read
     contents.gsub!("${PODS_ROOT}/AgoraRtcEngine_Special_iOS/#{xc_name}", '')
-    File.open(file, 'w') {|f| f.write(contents) }
+    File.open(file, 'w') { |f| f.write(contents) }
   end
 
 end
