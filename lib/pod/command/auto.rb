@@ -16,6 +16,7 @@ module Pod
             %w[--skip-package 跳过制作二进制.],
             %w[--clean-cache 构建时清除本地所有的组件缓存.⚠️注意：开启后会重新下载所有组件],
             %w[--mixup 开启构建时代码混淆功能.],
+            %w[--mixup-func-class-prefixes 开启构建时函数混淆功能.],
             %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
             %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
@@ -35,6 +36,7 @@ module Pod
 
           # 代码混淆配置项
           @mixup = argv.flag?('mixup', false)
+          @mixup_func_class_prefixes = argv.option('mixup-func-class-prefixes', '')
           @old_class_prefix = argv.option('old-class-prefix', 'BT')
           @new_class_prefixes = argv.option('new-class-prefixes', 'MNL,PPL')
           @filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,')
@@ -83,6 +85,7 @@ module Pod
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
             args.push('--mixup') if @mixup
+            args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
             args.push('--from-wukong') if @from_wukong
             args.push('--v2') if @use_build_v2
             args.push('--beta') if @beta_version_auto
@@ -104,6 +107,7 @@ module Pod
               args.push('--local', '--no-show-tips') if @local
               args.push('--clean-cache') if @clean_cache
               args.push('--mixup') if @mixup
+              args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
               args.push('--from-wukong') if @from_wukong
               args.push('--v2') if @use_build_v2
               args.push('--beta') if @beta_version_auto
