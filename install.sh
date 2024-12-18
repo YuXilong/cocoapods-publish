@@ -36,9 +36,9 @@ install_wukong() {
     # 安装WuKong
     echo '- Installing WuKong...'
     arch="$(uname -m)"
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.1.8"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.1.9"
     if [ "${arch}" == "x86_64" ]; then
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.1.8"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.1.9"
     fi
     des="/opt/homebrew/opt/ruby/bin/wukong"
     curl -L "$url" -o $des
@@ -58,9 +58,9 @@ update_wukong() {
     # 安装WuKong
     echo '- Installing WuKong...'
     arch="$(uname -m)"
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.1.8"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_arm64_2.1.9"
     if [ "${arch}" == "x86_64" ]; then
-    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.1.8"
+    url="https://github.com/YuXilong/cocoapods-publish/releases/download/v2.2.0/wukong_i386_2.1.9"
     fi
     des="/opt/homebrew/opt/ruby/bin/wukong"
     curl -L "$url" -o $des
