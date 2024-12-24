@@ -28,7 +28,7 @@ install_cocoapods() {
     gem sources --remove https://rubygems.org/
     gem sources --add https://gems.ruby-china.com/
     sudo gem update --system
-    sudo gem install cocoapods
+    sudo gem install -n /usr/local/bin/ cocoapods
 }
 
 # 安装WuKong
@@ -40,7 +40,9 @@ install_wukong() {
     if [ "${arch}" == "x86_64" ]; then
     url="https://vip.123pan.cn/1832538346/14654837"
     fi
-    des="/opt/homebrew/opt/ruby/bin/wukong"
+
+    check_dest
+    des="$HOME/.local/bin/wukong"
     curl -L "$url" -o $des
     chmod +x $des
     echo '- Installation successful!'
@@ -62,10 +64,23 @@ update_wukong() {
     if [ "${arch}" == "x86_64" ]; then
     url="https://vip.123pan.cn/1832538346/14654837"
     fi
-    des="/opt/homebrew/opt/ruby/bin/wukong"
+    check_dest
+    des="$HOME/.local/bin/wukong"
     curl -L "$url" -o $des
     chmod +x $des
     echo '- Installation successful!'
+}
+
+check_dest() {
+  dest="$HOME/.local/bin/"
+  # 判断文件夹是否存在
+  if [ ! -d "$dest" ]; then
+      mkdir -p "$dest"
+      # 将路径写入到 ~/.zshrc 文件中
+      echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+      # 让改动立即生效
+      source ~/.zshrc
+  fi
 }
 
 if ! command -v brew &> /dev/null; then
