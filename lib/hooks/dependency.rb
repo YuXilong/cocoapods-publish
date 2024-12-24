@@ -4,7 +4,7 @@ module Pod
     alias origin_initialize initialize
 
     # 混淆支持
-    FW_MIXUP_SUPPORT = %w[VO MNL PPL ZSL PAS PLA MTI].freeze
+    FW_MIXUP_SUPPORT = %w[VO MNL PPL ZSL PAS PLA MTI MIU].freeze
 
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
