@@ -80,7 +80,24 @@ module Pod
             restore_old_version_to_podspec
           end
 
-          restore_old_version_to_podspec if @is_version_need_attach_branch
+          # restore_old_version_to_podspec if @is_version_need_attach_branch
+          if @pod_name == 'BTAssets'
+            branch = get_current_branch
+
+            command = "git add . && git commit -m \"[Update] (#{@old_version})\""
+            command += " && git push origin #{branch} --quiet"
+
+            config.silent = true
+            output = `#{command}`.lines
+            UI.puts
+            config.silent = false
+
+            if $?.exitstatus != 0
+              UI.puts "-> #{output}".red
+              UI.puts "-> 代码提交失败！Command： #{command}".red
+              restore_old_version_to_podspec
+            end
+          end
 
           if @beta_version_publish
             @new_version = @new_version.split('.swift')[0] if @new_version.include?('.swift')
@@ -144,7 +161,7 @@ module Pod
         stdout.gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
       end
 
-      FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
+      FW_EXCLUDE_NAMES = %w[BTDContext].freeze
       def swift_version_support?
         name = @spec.attributes_hash['name']
         # 过滤白名单
@@ -163,6 +180,7 @@ module Pod
         @new_version = version
 
         @new_version = increase_number(version) unless @publish_framework
+        @new_version = increase_number(version) if @pod_name == 'BTAssets'
         @new_version = "#{@new_version}.#{@current_branch}" if @is_version_need_attach_branch
 
         # TODO: 适配仅源码模式

@@ -83,7 +83,7 @@ module Pod
       @@specified_framework_versions ||= {}
     end
 
-    FW_EXCLUDE_NAMES = %w[BTDContext BTAssets].freeze
+    FW_EXCLUDE_NAMES = %w[BTDContext].freeze
     def swift_framework?(fw)
       return false if fw.nil?
       # 过滤白名单

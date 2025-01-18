@@ -70,6 +70,7 @@ module Pod
         def run
           @podspec_root ||= Dir.pwd
           @podspec = find_podspec_file
+          @is_assets_framework = @podspec.include?('BTAssets.podspec')
 
           if @beta_version_auto && get_current_branch == 'main'
             puts 'main分支不支持发布Beta组件！'.red if @from_wukong
@@ -125,7 +126,8 @@ module Pod
 
           puts '-> 正在发布...'.yellow if @from_wukong
 
-          if !@beta_version_auto && !@upgrade_swift_auto
+          # BTAssets不发布源码版本
+          if !@beta_version_auto && !@upgrade_swift_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
