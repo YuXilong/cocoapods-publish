@@ -73,6 +73,31 @@ module Pod
           save_new_version_to_podspec
           push_framework_pod
 
+          if @pod_name == 'BTRouter' && !@beta_version_publish
+            # 只发正式版
+            scheme_map = {
+              'PLA' => 'poppo',
+              'VO' => 'vone',
+              'MNL' => 'mimi',
+              'MTI' => 'miti',
+              'MIU' => 'miu',
+              'ZSL' => 'jolly',
+              'PPL' => 'poppolite'
+            }
+            old_version = @new_version
+            scheme_map.each do |_key, val|
+              @new_version = "#{old_version}.#{val.upcase}"
+              save_new_version_to_podspec
+              push_framework_pod
+              @old_version = @new_version
+              restore_old_version_to_podspec
+            end
+
+            @old_version = old_version
+            restore_old_version_to_podspec
+
+          end
+
           # 处理Swift版本信息
           old_ver = @old_version
           if @new_version.include?('.swift')
