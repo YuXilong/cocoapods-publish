@@ -24,7 +24,8 @@ module Pod
             %w[--v2 使用`v2`构建系统],
             %w[--beta 发布beta版本],
             %w[--upgrade-swift 升级Swift版本],
-            %w[--continue-from-upload 从上传任务恢复发布]
+            %w[--continue-from-upload 从上传任务恢复发布],
+            %w[--subspecs 同时构建的subspec]
           ]
         end
 
@@ -33,6 +34,9 @@ module Pod
           @local = argv.flag?('local', true)
           @lib_lint = argv.flag?('lib-lint', false)
           @skip_package = argv.flag?('skip-package', false)
+
+          # 构建子subspec支持
+          @subspecs = argv.option('subspecs')
 
           # 代码混淆配置项
           @mixup = argv.flag?('mixup', false)
@@ -85,6 +89,7 @@ module Pod
             args.push('--continue-from-upload') if @continue_from_upload_auto
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
+            args.push("--subspecs=#{@subspecs}") unless @subspecs.nil?
             args.push('--mixup') if @mixup
             args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
             args.push('--from-wukong') if @from_wukong
@@ -107,6 +112,7 @@ module Pod
               args = [@podspec]
               args.push('--local', '--no-show-tips') if @local
               args.push('--clean-cache') if @clean_cache
+              args.push("--subspecs=#{@subspecs}") unless @subspecs.nil?
               args.push('--mixup') if @mixup
               args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
               args.push('--from-wukong') if @from_wukong
@@ -146,6 +152,7 @@ module Pod
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto
+          params << "--subspecs=#{@subspecs}" unless @subspecs.nil?
           params << '--upgrade-swift' if @upgrade_swift_auto
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run

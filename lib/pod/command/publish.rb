@@ -21,7 +21,8 @@ module Pod
           %w[--publish-framework 指定发布framework.],
           %w[--from-wukong 发起者为`wukong`],
           %w[--beta 发布beta版本],
-          %w[--upgrade-swift 升级Swift版本]
+          %w[--upgrade-swift 升级Swift版本],
+          %w[--subspecs 同时构建的subspec]
         ]
       end
 
@@ -35,6 +36,11 @@ module Pod
         @spec = spec_with_path(@name)
         @publish_framework = argv.flag?('publish-framework', false) || @source.eql?('BaiTuFrameworkPods')
         @from_wukong = argv.flag?('from-wukong', false)
+
+        # 构建子subspec支持
+        subspecs = argv.option('subspecs')
+        @subspecs = subspecs.split(',') unless subspecs.nil?
+        @subspecs = [] if @subspecs.nil?
 
         # 发布beta版本
         @beta_version_publish = argv.flag?('beta', false)
@@ -72,6 +78,22 @@ module Pod
           increase_version_number
           save_new_version_to_podspec
           push_framework_pod
+
+          # 发布subspec特定版本
+          @main_version = @new_version
+          @main_old_version = @old_version
+          @subspecs.each do |subspec|
+            @old_version = @new_version
+            @new_version = version_for_subspec(subspec)
+            save_new_version_to_podspec
+            save_new_default_subspec(subspec)
+            push_framework_pod
+            restore_old_version_to_podspec
+            restore_default_subspec(subspec)
+          end
+
+          @old_version = @main_old_version
+          @new_version = @main_version
 
           if @pod_name == 'BTRouter' && !@beta_version_publish
             # 只发正式版
@@ -155,6 +177,13 @@ module Pod
         check_repo_status
         push_pods
 
+      end
+
+      def version_for_subspec(subspec)
+        version = @main_version
+        version = @main_version.gsub(".swift-", ".#{subspec}.swift-") if version.include?(".swift-")
+        version = @main_version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}") if version.include?(".#{@current_branch}")
+        version
       end
 
       # 验证.podspec 执行 pod lib lint xxx.podspec
@@ -261,6 +290,26 @@ module Pod
         text = File.read(@name)
         text.gsub!("s.version          = '#{@new_version}'", "s.version          = '#{@old_version}'")
         File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      def save_new_default_subspec(subspec)
+        content = File.read(@name)
+        old_subspec = 'Core_Framework'
+        old_subspec = 'CoreFramework' unless content.include?("s.subspec 'Core_Framework'")
+        # 替换组件default_subspec
+        content = content.gsub(/s.subspec '#{old_subspec}'/, "s.subspec '#{old_subspec}_1'")
+        content = content.gsub(/s.subspec '#{subspec}_Framework'/, "s.subspec '#{old_subspec}'")
+        File.open(@name, 'w') { |file| file.puts content }
+      end
+
+      def restore_default_subspec(subspec)
+        content = File.read(@name)
+        old_subspec = 'Core_Framework'
+        old_subspec = 'CoreFramework' unless content.include?("s.subspec 'Core_Framework'")
+        # 替换组件default_subspec
+        content = content.gsub(/s.subspec '#{old_subspec}'/, "s.subspec '#{subspec}_Framework'")
+        content = content.gsub(/s.subspec '#{old_subspec}_1'/, "s.subspec '#{old_subspec}'")
+        File.open(@name, 'w') { |file| file.puts content }
       end
 
       # 适配新的文件保存路径
