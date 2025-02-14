@@ -183,6 +183,7 @@ module Pod
         version = @main_version
         version = @main_version.gsub(".swift-", ".#{subspec}.swift-") if version.include?(".swift-")
         version = @main_version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}") if version.include?(".#{@current_branch}")
+        version = "#{version}.#{subspec}" if !version.include?(".#{@current_branch}") && !version.include?(".swift-")
         version
       end
 
