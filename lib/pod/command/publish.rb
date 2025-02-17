@@ -81,7 +81,7 @@ module Pod
 
           # 发布subspec特定版本
           unless @subspecs.nil?
-            if @subspecs.count > 1
+            if @subspecs.count > 0
               @main_version = @new_version
               @main_old_version = @old_version
               @subspecs.each do |subspec|
