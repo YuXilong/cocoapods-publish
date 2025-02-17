@@ -173,7 +173,6 @@ module Pod
               restore_old_version_to_podspec
             end
           end
-
           return
         end
         @project_path = Pathname(@name).parent.to_s
@@ -198,11 +197,12 @@ module Pod
 
       def update_zip_file_for_version(version, subspec)
         zip_file_path = "repository/files/#{version}"
-        zip_file_path = "repository/files/#{version.split('.b')[0]}-beta" if version.include?('.b')
-        zip_file_path = "repository/files/#{version.split('.swift')[0]}" if version.include?('.swift')
-        if !subspec.nil? && version.include?(".#{subspec}")
-          zip_file_path = "repository/files/#{version.split(".#{subspec}")[0]}"
+        if version.include?('.b')
+          zip_file_path = "repository/files/#{version.split('.b')[0]}-beta"
+        elsif version.include?('.swift')
+          zip_file_path = "repository/files/#{version.split('.swift')[0]}"
         end
+        zip_file_path = zip_file_path.gsub(".#{subspec}", '') if !subspec.nil? && zip_file_path.include?(".#{subspec}")
 
         text = File.read(@name)
         text.gsub!(/zip_file_path =.*/, "zip_file_path = \"#{zip_file_path}\"")
