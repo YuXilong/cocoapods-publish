@@ -40,7 +40,6 @@ module Pod
         # 构建子subspec支持
         subspecs = argv.option('subspecs')
         @subspecs = subspecs.split(',') unless subspecs.nil?
-        @subspecs = [] if @subspecs.nil?
 
         # 发布beta版本
         @beta_version_publish = argv.flag?('beta', false)
@@ -77,23 +76,30 @@ module Pod
         if @publish_framework
           increase_version_number
           save_new_version_to_podspec
+          update_zip_file_for_version(@new_version, nil)
           push_framework_pod
 
           # 发布subspec特定版本
-          @main_version = @new_version
-          @main_old_version = @old_version
-          @subspecs.each do |subspec|
-            @old_version = @new_version
-            @new_version = version_for_subspec(subspec)
-            save_new_version_to_podspec
-            save_new_default_subspec(subspec)
-            push_framework_pod
-            restore_old_version_to_podspec
-            restore_default_subspec(subspec)
-          end
+          unless @subspecs.nil?
+            if @subspecs.count > 1
+              @main_version = @new_version
+              @main_old_version = @old_version
+              @subspecs.each do |subspec|
+                @old_version = @new_version
+                @new_version = version_for_subspec(subspec)
+                save_new_version_to_podspec
+                save_new_default_subspec(subspec)
+                update_zip_file_for_version(@new_version, subspec)
+                push_framework_pod
+                restore_old_version_to_podspec
+                restore_default_subspec(subspec)
+                restore_zip_file_for_version(@main_version)
 
-          @old_version = @main_old_version
-          @new_version = @main_version
+                @old_version = @main_old_version
+                @new_version = @main_version
+              end
+            end
+          end
 
           if @pod_name == 'BTRouter' && !@beta_version_publish
             # 只发正式版
@@ -110,6 +116,7 @@ module Pod
             scheme_map.each do |_key, val|
               @new_version = "#{old_version}.#{val.upcase}"
               save_new_version_to_podspec
+              update_zip_file_for_version(@new_version, nil)
               push_framework_pod
               @old_version = @new_version
               restore_old_version_to_podspec
@@ -181,10 +188,31 @@ module Pod
 
       def version_for_subspec(subspec)
         version = @main_version
-        version = @main_version.gsub(".swift-", ".#{subspec}.swift-") if version.include?(".swift-")
-        version = @main_version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}") if version.include?(".#{@current_branch}")
-        version = "#{version}.#{subspec}" if !version.include?(".#{@current_branch}") && !version.include?(".swift-")
+        version = @main_version.gsub('.swift-', ".#{subspec}.swift-") if version.include?('.swift-')
+        if version.include?(".#{@current_branch}")
+          version = @main_version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}")
+        end
+        version = "#{version}.#{subspec}" if !version.include?(".#{@current_branch}") && !version.include?('.swift-')
         version
+      end
+
+      def update_zip_file_for_version(version, subspec)
+        zip_file_path = "repository/files/#{version}"
+        zip_file_path = "repository/files/#{version.split('.b')[0]}-beta" if version.include?('.b')
+        zip_file_path = "repository/files/#{version.split('.swift')[0]}" if version.include?('.swift')
+        if !subspec.nil? && version.include?(".#{subspec}")
+          zip_file_path = "repository/files/#{version.split(".#{subspec}")[0]}"
+        end
+
+        text = File.read(@name)
+        text.gsub!(/zip_file_path =.*/, "zip_file_path = \"#{zip_file_path}\"")
+        File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      def restore_zip_file_for_version(version)
+        text = File.read(@name)
+        text.gsub!('zip_file_path =.*', "zip_file_path = \"repository/files/\#{s.version}\"")
+        File.open(@name, 'w') { |file| file.puts text }
       end
 
       # 验证.podspec 执行 pod lib lint xxx.podspec
