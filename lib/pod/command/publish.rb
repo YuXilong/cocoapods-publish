@@ -63,6 +63,16 @@ module Pod
 
       def run
 
+        @scheme_map = {
+          'PLA' => 'poppo',
+          'VO' => 'vone',
+          'MNL' => 'mimi',
+          'MTI' => 'miti',
+          'MIU' => 'miu',
+          'ZSL' => 'jolly',
+          'PPL' => 'poppolite'
+        }
+
         if @to_github
           push_pod_to_github
           return
@@ -103,17 +113,8 @@ module Pod
 
           if @pod_name == 'BTRouter' && !@beta_version_publish
             # 只发正式版
-            scheme_map = {
-              'PLA' => 'poppo',
-              'VO' => 'vone',
-              'MNL' => 'mimi',
-              'MTI' => 'miti',
-              'MIU' => 'miu',
-              'ZSL' => 'jolly',
-              'PPL' => 'poppolite'
-            }
             old_version = @new_version
-            scheme_map.each do |_key, val|
+            @scheme_map.each do |_key, val|
               @new_version = "#{old_version}.#{val.upcase}"
               save_new_version_to_podspec
               update_zip_file_for_version(@new_version, nil)
@@ -203,6 +204,12 @@ module Pod
           zip_file_path = "repository/files/#{version.split('.swift')[0]}"
         end
         zip_file_path = zip_file_path.gsub(".#{subspec}", '') if !subspec.nil? && zip_file_path.include?(".#{subspec}")
+
+        if @pod_name == 'BTRouter'
+          @scheme_map.each_value do |val|
+            zip_file_path = zip_file_path.gsub(".#{val.upcase}", '') if zip_file_path.include?(".#{val.upcase}")
+          end
+        end
 
         text = File.read(@name)
         text.gsub!(/zip_file_path =.*/, "zip_file_path = \"#{zip_file_path}\"")
