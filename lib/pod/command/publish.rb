@@ -174,6 +174,7 @@ module Pod
               restore_old_version_to_podspec
             end
           end
+          `git restore .`
           return
         end
         @project_path = Pathname(@name).parent.to_s
@@ -183,7 +184,7 @@ module Pod
         save_new_version_to_podspec
         check_repo_status
         push_pods
-
+        `git restore .`
       end
 
       def version_for_subspec(subspec)
