@@ -9,6 +9,10 @@ module Pod
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
 
+      if requirements.last.is_a?(Hash) && requirements.last.keys.first == :path
+        Dependency.source_dependency[name] = requirements.last[:path]
+      end
+
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
          swift_framework?(name) &&
@@ -83,6 +87,10 @@ module Pod
       @@specified_framework_versions ||= {}
     end
 
+    def self.source_dependency
+      @@source_dependenc ||= {}
+    end
+
     FW_EXCLUDE_NAMES = %w[BTDContext].freeze
     def swift_framework?(fw)
       return false if fw.nil?
@@ -117,14 +125,18 @@ module Pod
     end
 
     def local_framework_version(fw)
+      # 获取通过MIN_SWIFT_DEPENDENCY_VERSION指定的版本号
+      version = get_min_dependency_version(fw)
+      return version unless version.nil?
+
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
+      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").sort.reverse.select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
-      spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
-      return [] if spec_file.nil?
+      return [] if folder_paths.empty?
 
+      spec_file = folder_paths[0]
       spec = Specification.from_file(spec_file)
       spec.attributes_hash['version']
     end
@@ -133,6 +145,25 @@ module Pod
       SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
     end
 
+    # 获取指定的版本号
+    def get_min_dependency_version(fw_name)
+      regex = /^(?m)MIN_SWIFT_DEPENDENCY_VERSION\s*=\s*\[(?<SWIFT_DEPENDENCY>.*?)\]/
+      Dependency.source_dependency.each do |key, val|
+        content = File.read("#{val}/#{key}.podspec").to_s
+        content.scan(regex) do
+          # 直接获取命名捕获组 SWIFT_DEPENDENCY
+          dependency_str = Regexp.last_match[:SWIFT_DEPENDENCY].strip
+          # 分割为版本条目
+          versions = dependency_str.split(',').map(&:strip).reject(&:empty?)
+
+          versions.each do |v|
+            name = v.split('=>')[0].gsub("'", '').strip
+            return v.split('=>')[1]&.gsub("'", '')&.strip || nil if name == fw_name
+          end
+        end
+      end
+      nil
+    end
   end
 
 end
