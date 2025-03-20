@@ -22,7 +22,8 @@ module Pod
           %w[--from-wukong 发起者为`wukong`],
           %w[--beta 发布beta版本],
           %w[--upgrade-swift 升级Swift版本],
-          %w[--subspecs 同时构建的subspec]
+          %w[--subspecs 同时构建的subspec],
+          %w[--mixup-publish 混淆]
         ]
       end
 
@@ -51,6 +52,9 @@ module Pod
 
         # 发布到GitHub源码
         @to_github = argv.flag?('to-github', false)
+
+        # 是否混淆
+        @mixup_publish = argv.flag?('mixup-publish', false)
 
         super
       end
@@ -98,11 +102,13 @@ module Pod
                 @old_version = @new_version
                 @new_version = version_for_subspec(subspec)
                 save_new_version_to_podspec
-                save_new_default_subspec(subspec)
+                # 混淆不改podspec文件
+                save_new_default_subspec(subspec) unless @mixup_publish
                 update_zip_file_for_version(@new_version, subspec)
                 push_framework_pod
                 restore_old_version_to_podspec
-                restore_default_subspec(subspec)
+                # 混淆不改podspec文件
+                restore_default_subspec(subspec) unless @mixup_publish
                 restore_zip_file_for_version(@main_version)
 
                 @old_version = @main_old_version
@@ -198,6 +204,11 @@ module Pod
       end
 
       def update_zip_file_for_version(version, subspec)
+        zip_file_path = get_zip_path(version, subspec)
+        modify_zip_path(zip_file_path)
+      end
+
+      def get_zip_path(version, subspec)
         zip_file_path = "repository/files/#{version}"
         if version.include?('.b')
           zip_file_path = "repository/files/#{version.split('.b')[0]}-beta"
@@ -211,16 +222,12 @@ module Pod
             zip_file_path = zip_file_path.gsub(".#{val.upcase}", '') if zip_file_path.include?(".#{val.upcase}")
           end
         end
-
-        text = File.read(@name)
-        text.gsub!(/zip_file_path =.*/, "zip_file_path = \"#{zip_file_path}\"")
-        File.open(@name, 'w') { |file| file.puts text }
+        zip_file_path
       end
 
       def restore_zip_file_for_version(version)
-        text = File.read(@name)
-        text.gsub!('zip_file_path =.*', "zip_file_path = \"repository/files/\#{s.version}\"")
-        File.open(@name, 'w') { |file| file.puts text }
+        zip_file_path = "repository/files/\#{s.version}"
+        modify_zip_path(zip_file_path)
       end
 
       # 验证.podspec 执行 pod lib lint xxx.podspec
@@ -349,26 +356,43 @@ module Pod
         File.open(@name, 'w') { |file| file.puts content }
       end
 
+      # 修改zip下载path
+      def modify_zip_path(to)
+        content = File.open(@name).read
+
+        # 找到匹配的第一行位置
+        match_line_index = nil
+        content_lines = content.lines
+        content_lines.each_with_index do |line, index|
+          if line.include?('zip_file_path =')
+            match_line_index = index
+            break
+          end
+        end
+
+        # 删除包含 zip_file_path = 的所有行
+        content_lines.reject! { |line| line.include?('zip_file_path =') }
+
+        # 在匹配的第一行位置插入新内容
+        if match_line_index
+          content_lines.insert(match_line_index, "  zip_file_path = \"#{to}\"\n")
+        end
+
+        # 重新组合内容
+        content = content_lines.join
+        File.open(@name, 'w') { |file| file.puts content }
+      end
+
       # 适配新的文件保存路径
       def check_pod_http_source_publish
         content = File.open(@name).read.to_s
         # 已添加subspec跳过
-        return if content.include?("s.version.to_s.include?('.swift')")
+        return if content.include?('zip_file_path = ')
 
-        if content.include?('zip_file_path = s.')
-          zip_file_path = <<~CONTENT
-            zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : "repository/files/#\{s.version.to_s}"
-          CONTENT
-          new_zip_file_path = <<~CONTENT
-            zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : s.version.to_s.include?('.swift') ? "repository/files/#\{s.version.to_s.split('.swift')[0]}" : "repository/files/#\{s.version.to_s}"
-          CONTENT
-          content.gsub!(zip_file_path, new_zip_file_path)
-          File.open(@name, 'w') { |fw| fw.write(content) }
-          return
-        end
+        zip_file_path = get_zip_path(@new_version, nil)
 
         zip_file_path = <<~CONTENT
-          zip_file_path = s.version.to_s.include?('.b') ? "repository/files/#\{s.version.to_s.split('.b')[0]}-beta" : s.version.to_s.include?('.swift') ? "repository/files/#\{s.version.to_s.split('.swift')[0]}" : "repository/files/#\{s.version.to_s}"
+          zip_file_path = "#{zip_file_path}"
             if use_framework
         CONTENT
         zip_file_path = zip_file_path.chomp

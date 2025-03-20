@@ -154,6 +154,7 @@ module Pod
           params << '--beta' if @beta_version_auto
           params << "--subspecs=#{@subspecs}" unless @subspecs.nil?
           params << '--upgrade-swift' if @upgrade_swift_auto
+          params << '--mixup-publish' if @mixup
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i

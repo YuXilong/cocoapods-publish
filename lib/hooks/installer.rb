@@ -132,6 +132,7 @@ module Pod
           }
           next
         end
+        name.gsub!('_Framework', '')
         http = spec.root.source["http_#{name}".to_sym].to_s
         if http.empty?
           http = spec.root.source[:http].to_s

@@ -149,7 +149,10 @@ module Pod
     def get_min_dependency_version(fw_name)
       regex = /^(?m)MIN_SWIFT_DEPENDENCY_VERSION\s*=\s*\[(?<SWIFT_DEPENDENCY>.*?)\]/
       Dependency.source_dependency.each do |key, val|
-        content = File.read("#{val}/#{key}.podspec").to_s
+        file_path = "#{val}/#{key}.podspec"
+        next unless File.exist?(file_path)
+
+        content = File.read(file_path).to_s
         content.scan(regex) do
           # 直接获取命名捕获组 SWIFT_DEPENDENCY
           dependency_str = Regexp.last_match[:SWIFT_DEPENDENCY].strip
