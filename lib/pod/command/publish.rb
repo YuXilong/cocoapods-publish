@@ -484,6 +484,8 @@ module Pod
         config.silent = true
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
+          command = Repo::Update.new(CLAide::ARGV.coerce([@source]))
+          command.run
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
           command = Repo::Update.new(CLAide::ARGV.coerce([@source]))

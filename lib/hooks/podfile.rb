@@ -23,7 +23,7 @@ module Pod
       installer.generated_projects.each do |project|
         project.targets.each do |target|
           target.build_configurations.each do |config|
-            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '11.4'
+            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
             if target.name.end_with?('Unit-Tests')
               config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
               config.build_settings['DEVELOPMENT_TEAM'] = '33XFRZV3M7'
