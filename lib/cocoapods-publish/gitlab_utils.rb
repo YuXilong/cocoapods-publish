@@ -57,9 +57,35 @@ module Pod
         `#{command}`
         if $CHILD_STATUS.exitstatus != 0
           UI.puts '-> 远程仓库关联失败！'.red
+          clean
           Process.exit(1)
         end
         UI.puts '-> 远程仓库关联成功！'.green unless @from_wukong
+      end
+
+      def get_project_id
+        # 固定BTAssets版本号
+        return 913 if @spec.name == 'BTAssets'
+
+        UI.puts '-> 正在获取项目ID...'.yellow unless @from_wukong
+        params = {
+          'search': @spec.name
+        }
+        response = send_request(GET, '/groups/27/projects', params)
+        if response.nil?
+          UI.puts '-> 获取项目ID失败！'.red
+          clean
+          Process.exit(1)
+        end
+        projects = response.to_a.select { |p| p['name'] == @spec.name }
+        unless projects.empty?
+          UI.puts '-> 获取项目ID成功！'.green unless @from_wukong
+          return projects[0]['id']
+        end
+
+        UI.puts '-> 项目ID不存在！'.red
+        clean
+        Process.exit(1)
       end
 
       def send_request(type, path, params = {}, host = GITLAB_API)
@@ -70,6 +96,7 @@ module Pod
           request.body = params.to_json
           request['Content-Type'] = 'application/json'
         else
+          uri.query = URI.encode_www_form(params)
           request = Net::HTTP::Get.new(uri)
         end
 
@@ -85,6 +112,7 @@ module Pod
           UI.puts "-> 接口请求失败：#{uri}, Authorization: Bearer #{GITLAB_TOKEN}".red
           UI.puts "-> 响应Code：#{response.code}".red
           UI.puts "-> 返回内容\n：#{JSON::pretty_generate(JSON(response.body))}".red
+          clean
           Process.exit(1)
         end
       end

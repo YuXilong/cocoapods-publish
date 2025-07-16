@@ -18,10 +18,9 @@ module Pod
             %w[--mixup 开启构建时代码混淆功能.],
             %w[--mixup-func-class-prefixes 开启构建时函数混淆功能.],
             %w[--old-class-prefix 混淆时修改的类前缀.默认为：`BT`],
-            %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
+            %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
             %w[--from-wukong 发起者为`wukong`],
-            %w[--v2 使用`v2`构建系统],
             %w[--beta 发布beta版本],
             %w[--upgrade-swift 升级Swift版本],
             %w[--continue-from-upload 从上传任务恢复发布],
@@ -36,20 +35,17 @@ module Pod
           @skip_package = argv.flag?('skip-package', false)
 
           # 构建子subspec支持
-          @subspecs = argv.option('subspecs')
+          @auto_subspecs = argv.option('subspecs')
 
           # 代码混淆配置项
-          @mixup = argv.flag?('mixup', false)
-          @mixup_func_class_prefixes = argv.option('mixup-func-class-prefixes', '')
-          @old_class_prefix = argv.option('old-class-prefix', 'BT')
-          @new_class_prefixes = argv.option('new-class-prefixes', 'MNL,PPL')
-          @filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,')
+          @auto_mixup = argv.flag?('mixup', false)
+          @auto_mixup_func_class_prefixes = argv.option('mixup-func-class-prefixes', '')
+          @auto_old_class_prefix = argv.option('old-class-prefix', 'BT')
+          @auto_new_class_prefixes = argv.option('new-class-prefixes', '')
+          @auto_filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,')
 
           # 更新本地缓存
           @clean_cache = argv.flag?('clean-cache', false)
-
-          # 使用`v2`构建系统
-          @use_build_v2 = argv.flag?('v2', false)
 
           # 发布beta版本
           @beta_version_auto = argv.flag?('beta', false)
@@ -89,17 +85,16 @@ module Pod
             args.push('--continue-from-upload') if @continue_from_upload_auto
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
-            args.push("--subspecs=#{@subspecs}") unless @subspecs.nil?
-            args.push('--mixup') if @mixup
-            args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
+            args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
+            args.push('--mixup') if @auto_mixup
+            args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
             args.push('--from-wukong') if @from_wukong
-            args.push('--v2') if @use_build_v2
             args.push('--beta') if @beta_version_auto
             args.push('--upgrade-swift') if @upgrade_swift_auto
             args.push('--only-mixup') if @only_mixup_auto
-            args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
-            args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
-            args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
+            args.push("--new-class-prefixes=#{@auto_new_class_prefixes}") if @auto_mixup
+            args.push("--old-class-prefix=#{@auto_old_class_prefix}") if @auto_mixup
+            args.push("--filter-file-prefixes=#{@auto_filter_file_prefixes}") if @auto_mixup
 
             argv = CLAide::ARGV.coerce(args)
             Pod::Command::Package.new(argv).run
@@ -112,17 +107,16 @@ module Pod
               args = [@podspec]
               args.push('--local', '--no-show-tips') if @local
               args.push('--clean-cache') if @clean_cache
-              args.push("--subspecs=#{@subspecs}") unless @subspecs.nil?
-              args.push('--mixup') if @mixup
-              args.push("--mixup-func-class-prefixes=#{@mixup_func_class_prefixes}") if @mixup
+              args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
+              args.push('--mixup') if @auto_mixup
+              args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
               args.push('--from-wukong') if @from_wukong
-              args.push('--v2') if @use_build_v2
               args.push('--beta') if @beta_version_auto
               args.push('--upgrade-swift') if @upgrade_swift_auto
               args.push('--only-mixup') if @only_mixup_auto
-              args.push("--new-class-prefixes=#{@new_class_prefixes}") if @mixup
-              args.push("--old-class-prefix=#{@old_class_prefix}") if @mixup
-              args.push("--filter-file-prefixes=#{@filter_file_prefixes}") if @mixup
+              args.push("--new-class-prefixes=#{@auto_new_class_prefixes}") if @auto_mixup
+              args.push("--old-class-prefix=#{@auto_old_class_prefix}") if @auto_mixup
+              args.push("--filter-file-prefixes=#{@auto_filter_file_prefixes}") if @auto_mixup
 
               argv = CLAide::ARGV.coerce(args)
               Pod::Command::Package.new(argv).run
@@ -133,17 +127,21 @@ module Pod
           puts '-> 正在发布...'.yellow if @from_wukong
 
           # BTAssets不发布源码版本
+          should_increase_version = true
           if !@beta_version_auto && !@upgrade_swift_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
+            params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
+            params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
             argv = CLAide::ARGV.coerce(params)
             Publish.new(argv).run
             end_time = (Time.now.to_f * 1000).to_i
             duration = end_time - begin_time
             puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
+            should_increase_version = false
           end
 
           # 发布二进制
@@ -152,15 +150,19 @@ module Pod
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto
-          params << "--subspecs=#{@subspecs}" unless @subspecs.nil?
+          params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
           params << '--upgrade-swift' if @upgrade_swift_auto
-          params << '--mixup-publish' if @mixup
+          params << '--mixup-publish' if @auto_mixup
+          params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
+          params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
+          params << '--no-increase-version' unless should_increase_version
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i
           duration = end_time - begin_time
           puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]".green
           puts '-> 发布完成'.green unless @from_wukong
+
         end
 
         def get_current_branch
