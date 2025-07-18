@@ -182,7 +182,7 @@ module Pod
       end
 
       def push_mixup_pods
-        return unless @new_class_prefixes.count.positive? && @subspecs.count.positive?
+        return if @new_class_prefixes.count.zero? && @subspecs.count.zero?
 
         # 带有混淆
         version = @new_version
@@ -215,22 +215,8 @@ module Pod
 
         @subspecs.each do |cls|
           @new_spec_name = @pod_name.gsub('BT', cls)
-          meta = if @mixup_func_class_prefixes.include?(cls)
-                   @mixup_func_class_prefixes.delete(cls)
-                   "#{cls}-SF"
-                 else
-                   "#{cls}-S"
-                 end
+          meta = "#{cls}-S"
           @new_version = append_version_meta(version, meta)
-          save_new_version_to_podspec
-          save_new_default_subspec(cls)
-          update_zip_file_for_version(@new_version)
-          push_framework_pod
-        end
-
-        @mixup_func_class_prefixes.each do |cls|
-          @new_spec_name = @pod_name.gsub('BT', cls)
-          @new_version = append_version_meta(version, "#{cls}-F")
           save_new_version_to_podspec
           save_new_default_subspec(cls)
           update_zip_file_for_version(@new_version)
