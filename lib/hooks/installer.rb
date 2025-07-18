@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Pod
   class Installer
     alias origin_resolve_dependencies resolve_dependencies
@@ -37,6 +39,8 @@ module Pod
       original_verbose = $VERBOSE
       $VERBOSE = nil
 
+      apply_local_podfile if local_podfile_path.exist?
+
       analyzer = origin_resolve_dependencies
 
       # 恢复警告级别
@@ -46,41 +50,13 @@ module Pod
       check_http_source if use_framework
 
       analyzer
-    end
+      end
 
     def integrate_user_project
       res = origin_integrate_user_project
       $VERBOSE = nil
       res
     end
-
-    # def install!
-    #   prepare
-    #
-    #   # 屏蔽 "Previous definition" 警告
-    #   original_verbose = $VERBOSE
-    #   $VERBOSE = nil
-    #
-    #   resolve_dependencies
-    #
-    #   # 恢复警告级别
-    #   $VERBOSE = original_verbose
-    #
-    #   use_framework = ENV['USE_FRAMEWORK']
-    #   check_http_source if use_framework
-    #
-    #   download_dependencies
-    #   validate_targets
-    #   clean_sandbox
-    #   if installation_options.skip_pods_project_generation?
-    #     show_skip_pods_project_generation_message
-    #     run_podfile_post_install_hooks
-    #   else
-    #     integrate
-    #   end
-    #   write_lockfiles
-    #   perform_post_install_actions
-    # end
 
     alias origin_clean_sandbox clean_sandbox
     def clean_sandbox
@@ -115,7 +91,46 @@ module Pod
       end
     end
 
-    private
+      private
+
+    def local_podfile_path
+      Pathname("#{@podfile.defined_in_file}.local")
+    end
+
+    # 增加Podfile.local的支持
+    def apply_local_podfile
+      local_podfile = Podfile.from_ruby(local_podfile_path)
+      local_pods_def = local_podfile.target_definitions['Pods']
+      internal_hash_local = local_pods_def.instance_variable_get(:@internal_hash)
+
+      # 同步platform修改
+      unless local_pods_def.platform.nil?
+        internal_hash = @podfile.target_definitions['Pods'].instance_variable_get(:@internal_hash)
+        if internal_hash['platform'] != internal_hash_local['platform']
+          internal_hash['platform'] = internal_hash_local['platform']
+          @podfile.target_definitions['Pods'].instance_variable_set(:@internal_hash, internal_hash)
+        end
+      end
+
+      project_def = @podfile.target_definitions.select { |k, _| k != 'Pods' && !k.include?('Tests') }.values.first
+      internal_hash = project_def.instance_variable_get(:@internal_hash)
+      dependencies = internal_hash['dependencies']
+
+      # 本地版本覆盖主版本
+      local_dependencies = internal_hash_local['dependencies']
+      local_dependencies.each do |dep|
+        dep.each do |name, _|
+          removed = dependencies.reject! do |item|
+            item == name || (item.is_a?(Hash) && item.keys.include?(name))
+          end
+          dependencies << dep if removed
+          ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
+        end
+      end
+
+      internal_hash['dependencies'] = dependencies
+      @podfile.target_definitions[project_def.label.gsub('Pods-', '')].instance_variable_set(:@internal_hash, internal_hash)
+    end
 
     # 根据混淆模式动态修改对应地址
     def check_http_source
@@ -147,7 +162,7 @@ module Pod
       end
     end
 
-    # 检查清理缓存
+      # 检查清理缓存
     def clean_spec(spec)
       cache_root = "#{Config.instance.cache_root}/Pods"
       spec_root = "#{cache_root}/Release/#{spec.root.name}"
@@ -163,5 +178,5 @@ module Pod
       end
     end
 
+    end
   end
-end

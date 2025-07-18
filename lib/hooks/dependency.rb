@@ -98,8 +98,9 @@ module Pod
       return false unless FW_EXCLUDE_NAMES.filter { |name| fw.include?(name) }.empty?
 
       podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
-      if File.exist?(podfile_path)
-        content = File.read(podfile_path).to_s
+      podfile_local_path = "#{podfile_path}.local"
+      if File.exist?(podfile_local_path)
+        content = File.read(podfile_local_path).to_s
         content.gsub!(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
         return false unless content.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
       else
