@@ -14,6 +14,7 @@ module Pod
 
       # 多仓库同名称警告关闭
       podfile.installation_options.warn_for_multiple_pod_sources = false
+      podfile.installation_options.warn_for_unused_master_specs_repo = true
       origin_initialize(sandbox, podfile, lockfile)
       # 检测本地Swift版本
       check_swift_version
@@ -121,7 +122,7 @@ module Pod
       local_dependencies.each do |dep|
         dep.each do |name, _|
           removed = dependencies.reject! do |item|
-            item == name || (item.is_a?(Hash) && item.keys.include?(name))
+            item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
           end
           dependencies << dep if removed
           ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
