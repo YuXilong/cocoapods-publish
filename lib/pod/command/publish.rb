@@ -188,13 +188,11 @@ module Pod
 
 
       def push_mixup_pods
-        unless @beta_version_publish
-          # 发布主版本
-          @new_spec_name = @pod_name
-          save_new_version_to_podspec
-          update_zip_file_for_version(@new_version)
-          push_framework_pod
-        end
+        # 发布主版本
+        @new_spec_name = @pod_name
+        save_new_version_to_podspec
+        update_zip_file_for_version(@new_version)
+        push_framework_pod
 
         return if @new_class_prefixes.count.zero? && @subspecs.count.zero?
 
