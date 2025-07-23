@@ -179,23 +179,13 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
   added_sources.each { |source| context.add_source(sources_manger.source_with_name_or_url(source)) }
 end
 
-# Pod::HooksManager.register('cocoapods-publish', :post_install) do |context, _|
-#   project_pods_root = Pod::Config.instance.project_pods_root.to_s
+# Pod::HooksManager.register('cocoapods-publish', :post_install) do |installer_context, _|
+#   pods_project = installer_context.pods_project
+#   file_path = pods_project.project_dir.to_s.gsub('Pods', 'Podfile.local')
+#   next unless File.exist?(file_path)
 #
-#   puts '正在裁剪AgoraSDK...'
-#
-#   frameworks_to_remove = %w[AgoraAiEchoCancellationExtension AgoraAiNoiseSuppressionExtension AgoraAudioBeautyExtension AgoraClearVisionExtension AgoraDrmLoaderExtension AgoraReplayKitExtension AgoraSpatialAudioExtension]
-#
-#   frameworks_to_remove = frameworks_to_remove.map { |fw| "#{project_pods_root}/**/#{fw}.xcframework" }
-#   frameworks_to_remove.each { |pa|
-#     Dir.glob(pa).each { |f|
-#       `rm -rf #{f}`
-#       process_file(project_pods_root, Pathname(f).basename.to_s)
-#       puts "已裁剪#{Pathname(f).basename.to_s}"
-#     }
-#   }
-#
-#   puts 'AgoraSDK裁剪完成'
+#   pods_project.add_podfile(file_path)
+#   pods_project.save
 # end
 
 def process_file(pods_root, xc_name)
