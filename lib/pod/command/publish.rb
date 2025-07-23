@@ -366,7 +366,8 @@ module Pod
         end
 
         # 处理Swift版本
-        "#{new_version}.swift-#{@swift_version}" if swift_version_support?
+        return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
+
         new_version
       end
 
