@@ -127,11 +127,11 @@ module Pod
           puts '-> 正在发布...'.yellow if @from_wukong
 
           # BTAssets不发布源码版本
-          should_increase_version = true
+          should_increase_version = false
           if !@beta_version_auto && !@upgrade_swift_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
-            puts '-> 正在发布到源码私有库...'.yellow unless @from_wukong
+            puts '-> 正在发布到源码私有库...'.yellow
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
             params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
@@ -146,7 +146,7 @@ module Pod
 
           # 发布二进制
           begin_time = (Time.now.to_f * 1000).to_i
-          puts '-> 正在发布到二进制私有库...'.yellow unless @from_wukong
+          puts '-> 正在发布到二进制私有库...'.yellow
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto

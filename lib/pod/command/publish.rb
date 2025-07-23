@@ -78,8 +78,7 @@ module Pod
                                      end
 
         # 不自增版本号
-        @no_increase_version = argv.flag?('no-increase-version', false)
-
+        @increase_version = argv.flag?('increase-version', true)
         super
       end
 
@@ -163,6 +162,8 @@ module Pod
       end
 
       def push_code
+        # 本地仓库无修改
+        return unless git_dirty?
         version = code_version
         branch = get_current_branch
 
@@ -175,13 +176,26 @@ module Pod
         config.silent = false
 
         if $?.exitstatus != 0
-          "#{cls}-SCF"
           UI.puts "-> 代码提交失败！Command： #{command}".red
           `git reset --hard HEAD~1`
         end
       end
 
+      def git_dirty?
+        status = `git status --porcelain`
+        !status.strip.empty?
+      end
+
+
       def push_mixup_pods
+        unless @beta_version_publish
+          # 发布主版本
+          @new_spec_name = @pod_name
+          save_new_version_to_podspec
+          update_zip_file_for_version(@new_version)
+          push_framework_pod
+        end
+
         return if @new_class_prefixes.count.zero? && @subspecs.count.zero?
 
         # 带有混淆
@@ -214,7 +228,8 @@ module Pod
         end
 
         @subspecs.each do |cls|
-          @new_spec_name = @pod_name.gsub('BT', cls)
+          @new_spec_name = @pod_name
+          @new_spec_name.gsub!('BT', cls) unless @pod_name.include?('BTBytedEffect')
           meta = "#{cls}-S"
           @new_version = append_version_meta(version, meta)
           save_new_version_to_podspec
@@ -320,7 +335,7 @@ module Pod
       def generate_new_version
         # 版本号自增
         parse_version
-        increase_number unless @no_increase_version
+        increase_number if @increase_version
         new_version = @version_number.to_s
         if @is_version_need_attach_branch
           # 附带分支名称的不发beta
@@ -432,9 +447,12 @@ module Pod
 
         framework_spec_contents = content.gsub(/\s{2}s\.subspec 'CoreFramework[\w\W]*?\bend/).to_a
         if framework_spec_contents.empty?
-          puts "-> podspec配置不正确，请检查#{@name}CoreFramework字段。".red
-          clean
-          Process.exit(1)
+          framework_spec_contents = content.gsub(/\s{2}s\.subspec 'Core_Framework[\w\W]*?\bend/).to_a
+          if framework_spec_contents.empty?
+            puts "-> podspec配置不正确，请检查#{@name} CoreFramework字段。".red
+            clean
+            Process.exit(1)
+          end
         end
 
         framework_spec_content = framework_spec_contents.first.to_s
@@ -554,7 +572,7 @@ module Pod
       def push_pods
         UI.puts "-> 发布新版本(#{@new_version})...".yellow unless @from_wukong
         config.silent = true
-        argv = CLAide::ARGV.coerce([@push_podspec_file, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
+        argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
