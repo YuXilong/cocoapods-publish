@@ -119,8 +119,7 @@ module Pod
 
       # 本地版本覆盖主版本
       local_dependencies = internal_hash_local['dependencies']
-      if !local_dependencies.nil? && local_dependencies.is_a?
-        local_dependencies.each do |dep|
+      local_dependencies&.each do |dep|
           dep.each do |name, _|
             removed = dependencies.reject! do |item|
               item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
@@ -129,7 +128,6 @@ module Pod
             ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
           end
         end
-      end
 
       internal_hash['dependencies'] = dependencies
       @podfile.target_definitions[project_def.label.gsub('Pods-', '')].instance_variable_set(:@internal_hash, internal_hash)
