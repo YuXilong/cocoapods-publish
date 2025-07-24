@@ -119,13 +119,15 @@ module Pod
 
       # 本地版本覆盖主版本
       local_dependencies = internal_hash_local['dependencies']
-      local_dependencies.each do |dep|
-        dep.each do |name, _|
-          removed = dependencies.reject! do |item|
-            item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
+      if !local_dependencies.nil? && local_dependencies.is_a?
+        local_dependencies.each do |dep|
+          dep.each do |name, _|
+            removed = dependencies.reject! do |item|
+              item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
+            end
+            dependencies << dep if removed
+            ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
           end
-          dependencies << dep if removed
-          ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
         end
       end
 
