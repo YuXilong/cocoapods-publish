@@ -45,7 +45,9 @@ module Pod
       version = requirements[0]
 
       # 其它地方已指定版本号，本次不自动指定版本号，比如在podspec中依赖通常不指定版本号 在podfile中会指定对应的版本号
-      return Dependency.specified_framework_versions[name] if version.is_a?(Array) && Dependency.specified_framework_versions.keys.include?(name)
+      if version.is_a?(Array) && Dependency.specified_framework_versions.keys.include?(name)
+        return Dependency.specified_framework_versions[name]
+      end
 
       # 已自动指定版本号
       version = Dependency.modified_frameworks[name] if Dependency.modified_frameworks.keys.include?(name)
@@ -64,7 +66,9 @@ module Pod
       Dependency.modified_frameworks[name] = version unless Dependency.modified_frameworks.keys.include?(name)
 
       # 存储已指定的版本号
-      Dependency.specified_framework_versions[name] = version if is_specified && !Dependency.specified_framework_versions.keys.include?(name)
+      if is_specified && !Dependency.specified_framework_versions.keys.include?(name)
+        Dependency.specified_framework_versions[name] = version
+      end
 
       # puts "-> 安装依赖后：#{name}, requirements:#{version}" if name == 'BTVideoCapture'
       # 重新指定版本
@@ -102,7 +106,7 @@ module Pod
       if File.exist?(podfile_local_path) || File.exist?(podfile_path)
         content = File.read(podfile_local_path).to_s if File.exist?(podfile_local_path)
         content = File.read(podfile_path).to_s unless File.exist?(podfile_local_path)
-        content.gsub!(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
+        content&.gsub!(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
         return false unless content.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
       else
         deps = Pod::Config.instance.podfile.to_hash['target_definitions'][0]['children'][0]['dependencies']
@@ -123,7 +127,8 @@ module Pod
       return false if spec_file.nil?
 
       content = File.open(spec_file).read.to_s
-      !content.gsub(/source_files.*=.*.swift/).to_a.empty?
+      !content.gsub(/source_files.*=.*.swift/).to_a.empty? ||
+        !content.gsub(%r{.swift-.*\.zip/raw\?ref=main}).to_a.empty?
     end
 
     def local_framework_version(fw)
