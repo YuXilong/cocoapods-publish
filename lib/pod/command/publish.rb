@@ -104,7 +104,7 @@ module Pod
           'PPL' => 'poppolite'
         }
         @current_branch = get_current_branch.upcase
-        @pod_name = @spec.attributes_hash['name']
+        @pod_name = @spec.name
 
         @is_version_need_attach_branch = @pod_name == 'BTAssets' && @current_branch != 'MAIN'
 
@@ -391,6 +391,7 @@ module Pod
         text = File.read(@name)
         version = @version_number.to_s
         version = "#{@version_number}.b#{@beta_version_number}" if @beta_version_publish
+        version = "#{version}.#{@current_branch}" if @is_version_need_attach_branch
         text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{version}'")
         File.open(@name, 'w') { |file| file.puts text }
       end
