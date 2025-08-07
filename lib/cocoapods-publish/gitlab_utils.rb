@@ -19,12 +19,15 @@ module Pod
       end
 
       def project_id
-        response = send_request(GET, "/groups/#{GITLAB_VI_GROUP_ID}") if @spec.name.include?('Vietnam')
-        response = send_request(GET, "/groups/#{GITLAB_GROUP_ID}") unless @spec.name.include?('Vietnam')
+        params = {
+          'search': @spec.name
+        }
+        response = send_request(GET, "/groups/#{GITLAB_VI_GROUP_ID}/projects", params) if @spec.name.include?('Vietnam')
+        response = send_request(GET, "/groups/#{GITLAB_GROUP_ID}/projects", params) unless @spec.name.include?('Vietnam')
 
-        projects = response['projects']
-        unless projects.select! { |p| p['name'].eql?(@spec.name) }.empty?
-          UI.puts '-> 获取远程仓库信息成功！'.green unless @from_wukong
+        projects = response.to_a.select { |p| p['name'] == @spec.name }
+        unless projects.empty?
+          UI.puts '-> 获取项目ID成功！'.green unless @from_wukong
           return
         end
         UI.puts '-> 正在创建远程仓库...'.yellow unless @from_wukong
