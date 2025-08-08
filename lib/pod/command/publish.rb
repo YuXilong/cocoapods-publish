@@ -431,7 +431,7 @@ module Pod
 
         # 删除包含 zip_file_path = 的所有行
         content_lines.reject! do |line|
-          line.include?('zip_file_path =') || line.include?('git_source = ') || line.include?('以下为脚本依赖CoreFramework')
+          line.include?('zip_file_path =') || line.include?('git_source = ') || line.include?('以下为脚本依赖CoreFramework') || line.include?('s.default_subspec =')
         end
 
         # 重新组合内容
@@ -465,6 +465,7 @@ module Pod
         content.gsub!(/if use_framework.*?end/m, http_source.rstrip)
         content.gsub!(framework_spec_content, new_framework_spec_content.strip)
         content.gsub!(/\s{2}s\.subspec *.[\w\W]*?\bend/m, '')
+        content.gsub!(/\s{2}s\.default_subspec = 'Core'/m, '')
         content.gsub!(/\s{2}s\.test_spec *.[\w\W]*?\bend/m, '')
         content.gsub!(/\n{2,}/, "\n\n")
         content.gsub!('    ', '  ')
