@@ -148,7 +148,7 @@ module Pod
           begin_time = (Time.now.to_f * 1000).to_i
           puts '-> 正在发布到二进制私有库...'.yellow
           params = ['BaiTuFrameworkPods', @podspec]
-          params << '--from-wukong' if @from_wukong
+          # params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto
           params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
           params << '--upgrade-swift' if @upgrade_swift_auto

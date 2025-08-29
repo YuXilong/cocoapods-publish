@@ -140,6 +140,8 @@ module Pod
             push_mixup_pods
           end
 
+          puts "-> clean..."
+
           clean
           save_new_version_to_local_podspec
           push_code
@@ -163,6 +165,7 @@ module Pod
 
       def push_code
         # 本地仓库无修改
+        puts "-> push_code..."
         return unless git_dirty?
         version = code_version
         branch = get_current_branch
@@ -172,11 +175,10 @@ module Pod
 
         config.silent = true
         output = `#{command}`.lines
-        UI.puts
         config.silent = false
 
         if $?.exitstatus != 0
-          UI.puts "-> 代码提交失败！Command： #{command}".red
+          puts "-> 代码提交失败！Command： #{command}".red
           `git reset --hard HEAD~1`
         end
       end
@@ -224,10 +226,9 @@ module Pod
           update_zip_file_for_version(@new_version)
           push_framework_pod
         end
-
         @subspecs.each do |cls|
           @new_spec_name = @pod_name
-          @new_spec_name.gsub!('BT', cls) unless @pod_name.include?('BTBytedEffect')
+          @new_spec_name = @new_spec_name.gsub('BT', cls) unless @pod_name.include?('BTBytedEffect')
           meta = "#{cls}-S"
           @new_version = append_version_meta(version, meta)
           save_new_version_to_podspec
