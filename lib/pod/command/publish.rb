@@ -140,8 +140,6 @@ module Pod
             push_mixup_pods
           end
 
-          puts "-> clean..."
-
           clean
           save_new_version_to_local_podspec
           push_code
@@ -165,7 +163,6 @@ module Pod
 
       def push_code
         # 本地仓库无修改
-        puts "-> push_code..."
         return unless git_dirty?
         version = code_version
         branch = get_current_branch
