@@ -135,8 +135,11 @@ module Pod
 
     # 根据混淆模式动态修改对应地址
     def check_http_source
+      host = (ENV['GIT_LAB_HOST']).to_s.freeze
       analysis_result.specifications.filter { |spec| spec.name.start_with?('BT') }.each do |spec|
         name = spec.attributes_hash['name']
+        # 迁移域名
+        spec.root.source[:http] = spec.root.source[:http].gsub('gitlab.v.show', host) if spec.root.source[:http]
         clean_spec(spec)
         if name.start_with?('Core') || name.eql?(spec.root.name)
           next unless spec.root.source[:git].nil?

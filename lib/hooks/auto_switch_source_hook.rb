@@ -169,12 +169,13 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
 
   use_framework = ENV['USE_FRAMEWORK'] == '1'
 
-  # 添加源码私有源 && 二进制私有源 ssh://git@gitlab.v.show:1022/ios_framework/frameworkpods.git ssh://git@gitlab.v.show:1022/ios_component/baitupods.git
+  host = (ENV['GIT_LAB_HOST']).to_s.freeze
+  # 添加源码私有源 && 二进制私有源 ssh://git@#{host}:1022/ios_framework/frameworkpods.git ssh://git@#{host}:1022/ios_component/baitupods.git
   added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git https://github.com/BaiTu-iOS/baitu-specs.git https://github.com/aliyun/aliyun-specs.git]
   added_sources << if use_framework
-                     'http://gitlab.v.show/ios_framework/frameworkpods.git'
+                     "http://#{host}/ios_framework/frameworkpods.git"
                    else
-                     'http://gitlab.v.show/ios_component/baitupods.git'
+                     "http://#{host}/ios_component/baitupods.git"
                    end
   added_sources.each { |source| context.add_source(sources_manger.source_with_name_or_url(source)) }
 end
