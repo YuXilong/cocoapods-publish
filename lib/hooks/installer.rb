@@ -158,7 +158,7 @@ module Pod
           http.gsub('BT', mix)
         end
         # 迁移域名
-        http.gsub!('gitlab.v.show', host)
+        http.gsub!('gitlab.v.show', host) if http.strip != ''
         spec.root.source = {
           http: http,
           type: spec.root.source[:type],
