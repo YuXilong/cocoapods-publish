@@ -51,7 +51,7 @@ install_wukong() {
     wukong update
     wukong update --pod-plugins
 
-    pod repo add BaiTuFrameworkPods https://gitlabcode_.v.show/ios_framework/frameworkpods.git
+    pod repo add BaiTuFrameworkPods https://${GIT_LAB_HOST}/ios_framework/frameworkpods.git
     pod repo update BaiTuFrameworkPods
 }
 
