@@ -437,7 +437,7 @@ module Pod
 
         http_source = <<~SPEC
           s.source = {
-                :http => "https://gitlab.v.show/api/v4/projects/#{get_project_id}/#{zip_path}%2F#{@new_spec_name}-#{@new_version}.zip/raw?ref=main",
+                :http => "https://gitlabcode_.v.show/api/v4/projects/#{get_project_id}/#{zip_path}%2F#{@new_spec_name}-#{@new_version}.zip/raw?ref=main",
                 :type => "zip",
                 :headers => ["Authorization: Bearer \#{ENV['GIT_LAB_TOKEN']}"]
               }
@@ -468,7 +468,7 @@ module Pod
         content.gsub!(/\n{2,}/, "\n\n")
         content.gsub!('    ', '  ')
         content.gsub!('s.vendored_frameworks', '  s.vendored_frameworks')
-        content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://gitlab.v.show/ios_framework/\#{s.name.to_s}.git\"")
+        content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://gitlabcode_.v.show/ios_framework/\#{s.name.to_s}.git\"")
         File.open(@push_podspec_file, 'w') { |file| file.puts content.strip }
       end
 

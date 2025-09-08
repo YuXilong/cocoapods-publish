@@ -4,7 +4,7 @@ module Pod
     # GitLab扩展
     class Publish < Command
 
-      GITLAB_API = 'https://gitlab.v.show/api/v4/'.freeze
+      GITLAB_API = 'https://gitlabcode_.v.show/api/v4/'.freeze
       GITLAB_GROUP_ID = '26'.freeze
       GITLAB_VI_GROUP_ID = '520'.freeze
       GITLAB_TOKEN = (ENV['GIT_LAB_TOKEN']).to_s.freeze
