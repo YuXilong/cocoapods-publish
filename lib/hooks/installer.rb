@@ -139,7 +139,7 @@ module Pod
       analysis_result.specifications.filter { |spec| spec.name.start_with?('BT') }.each do |spec|
         name = spec.attributes_hash['name']
         # 迁移域名
-        spec.root.source[:http] = spec.root.source[:http].gsub('gitlab.v.show', host) if spec.root.source[:http]
+        spec.root.source[:http]&.gsub!('gitlab.v.show', host)
         clean_spec(spec)
         if name.start_with?('Core') || name.eql?(spec.root.name)
           next unless spec.root.source[:git].nil?
@@ -157,7 +157,8 @@ module Pod
           http = spec.root.source[:http].to_s
           http.gsub('BT', mix)
         end
-
+        # 迁移域名
+        http.gsub!('gitlab.v.show', host)
         spec.root.source = {
           http: http,
           type: spec.root.source[:type],
