@@ -346,6 +346,9 @@ module Pod
           # swift 版本升级
           version = @spec.attributes_hash['version']
           new_version = version.split('.swift')[0] if version.include?('.swift')
+          if @beta_version_number != 0 && !new_version.include?('.b')
+            new_version = "#{new_version}.b#{@beta_version_number}"
+          end
           # 处理Swift版本
           return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
 

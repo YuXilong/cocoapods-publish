@@ -144,6 +144,8 @@ module Pod
             should_increase_version = false
           end
 
+          should_increase_version = false if @upgrade_swift_auto
+
           # 发布二进制
           begin_time = (Time.now.to_f * 1000).to_i
           puts '-> 正在发布到二进制私有库...'.yellow
