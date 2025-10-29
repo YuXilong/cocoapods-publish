@@ -140,6 +140,8 @@ module Pod
         name = spec.attributes_hash['name']
         # 迁移域名
         spec.root.source[:http].gsub!('gitlab.v.show', host) if spec.root.source[:http] && spec.root.source[:http].strip != ''
+        # spec.root.source[:http].gsub!(host, '47.100.39.127') if spec.root.source[:http] && spec.root.source[:http].strip != ''
+        # spec.root.source[:headers] << "Host: #{host}"
         clean_spec(spec)
         if name.start_with?('Core') || name.eql?(spec.root.name)
           next unless spec.root.source[:git].nil?

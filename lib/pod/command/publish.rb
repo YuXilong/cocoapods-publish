@@ -97,11 +97,11 @@ module Pod
         @scheme_map = {
           'PLA' => 'poppo',
           'VO' => 'vone',
-          'MNL' => 'mimi',
-          'MTI' => 'miti',
-          'MIU' => 'miu',
-          'ZSL' => 'jolly',
-          'PPL' => 'poppolite'
+          # 'MNL' => 'mimi',
+          # 'MTI' => 'miti',
+          # 'MIU' => 'miu',
+          # 'ZSL' => 'jolly',
+          # 'PPL' => 'poppolite'
         }
         @current_branch = get_current_branch.upcase
         @pod_name = @spec.name

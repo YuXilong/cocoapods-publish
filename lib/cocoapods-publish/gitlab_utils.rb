@@ -105,6 +105,7 @@ module Pod
         end
 
         request['Authorization'] = "Bearer #{ENV['GIT_LAB_TOKEN']}"
+        # request['Host'] = "gitlabcode_.v.show"
 
         response = Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https') do |http|
           http.request(request)
