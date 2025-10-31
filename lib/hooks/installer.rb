@@ -124,7 +124,8 @@ module Pod
             removed = dependencies.reject! do |item|
               item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
             end
-            dependencies << dep if removed
+            # dependencies << dep if removed
+            dependencies << dep
             ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
           end
         end
