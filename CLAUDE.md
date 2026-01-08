@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-cocoapods-publish 是一个 CocoaPods 插件，用于自动发布 iOS 组件到私有仓库（BaiTuPods 源码仓库、BaiTuFrameworkPods 二进制仓库）。支持源码版本、二进制 Framework 版本和代码混淆版本的自动化发布。
+cocoapods-publish 是一个 CocoaPods 插件，用于自动发布组件到私有组件仓库。主要功能包括：
+
+- 自动发布源码/二进制组件到私有仓库
+- 源码与二进制模式自动切换
+- 支持代码混淆发布
+- 支持 Swift 版本管理
+- 支持 beta 版本发布
+- 自动创建 GitLab 仓库
+- Podfile.local 本地覆盖支持
 
 ## 常用命令
 
@@ -13,55 +21,80 @@ cocoapods-publish 是一个 CocoaPods 插件，用于自动发布 iOS 组件到�
 bundle install
 
 # 运行测试
-bundle exec bacon spec/**/*_spec.rb
-# 或
-rake spec
+bundle exec rake specs
 
-# 代码检查
-bundle exec rubocop
+# 本地安装插件
+bundle exec rake install
+
+# 发布到 RubyGems
+bundle exec rake release
 ```
 
-## 核心架构
+### 使用插件命令
 
-### 命令模块 (`lib/pod/command/`)
-- **publish.rb** - 主发布命令，处理版本号递增、podspec 验证、Git 标签管理、仓库推送
-- **auto.rb** - 自动化发布，一键打包生成二进制并同时发布源码和二进制版本
+```bash
+# 发布组件到私有仓库
+pod publish REPO_NAME POD_SPEC_FILE
 
-### 工具模块 (`lib/cocoapods-publish/`)
-- **pod_utils.rb** - 沙箱构建、Pod 依赖安装、Podfile 生成
-- **repo_utils.rb** - `PushWithoutValid` 类实现跳过验证的推送
-- **gitlab_utils.rb** - GitLab API 交互（项目创建、远程仓库管理）
-- **podfile_dsl.rb** - 自定义 DSL（baitu_dependencies, baitu_use_frameworks!, baitu_mixup_module!）
-
-### 钩子系统 (`lib/hooks/`)
-CocoaPods 生命周期钩子，在安装过程中执行自定义逻辑：
-- **auto_switch_source_hook.rb** - pre_install/source_provider 钩子，处理源码/二进制模式切换和缓存管理
-- **installer.rb** - 扩展 Pod::Installer，支持 Podfile.local、Swift 版本检测
-- **dependency.rb** - 扩展 Pod::Dependency，Swift 版本自适应、混淆支持
-- **podfile.rb** - 扩展 Pod::Podfile，设置默认部署目标（iOS 13.0）
-- **version.rb** - 扩展 Pod::Version，处理 .swift 后缀版本号
-
-### 插件入口
-- **lib/cocoapods_plugin.rb** - 导入所有模块和钩子
-- **lib/cocoapods-publish.rb** - 版本定义（当前 2.7.5）
-
-## 发布流程
-
-```
-命令解析 → 版本号处理 → podspec 验证 (pod lib lint)
-    → GitLab 仓库检查/创建 → Git 标签创建推送 → 私有仓库发布
+# 一键打包发布
+pod publish auto [NAME.podspec] [options]
 ```
 
-## 关键特性
-- 多源支持（trunk, BaiTuPods, BaiTuFrameworkPods）
-- 自动版本号递增、Beta 版本、Swift 版本标签
-- 二进制 Framework 发布（vendored_frameworks）
-- 代码混淆变体发布
-- Subspecs 独立发布
-- Podfile.local 本地依赖覆盖
-- 源码/二进制缓存自动切换
+## 代码架构
 
-## 环境变量
+### 核心入口
+- `lib/cocoapods_plugin.rb` - 插件入口，加载所有模块
+- `lib/cocoapods-publish.rb` - 版本定义
+
+### 命令模块 (lib/pod/command/)
+- `publish.rb` - 主发布命令，处理版本管理、验证、推送等
+- `auto.rb` - 一键打包发布命令，整合打包和发布流程
+
+### 工具模块 (lib/cocoapods-publish/)
+- `pod_utils.rb` - Pod 构建相关工具（Sandbox、Installer、动态库构建等）
+- `repo_utils.rb` - 仓库推送工具（PushWithoutValid 跳过验证直接推送）
+- `gitlab_utils.rb` - GitLab API 交互（项目创建、ID查询等）
+- `podfile_dsl.rb` - Podfile DSL 扩展（baitu_use_frameworks!、baitu_mixup_module!）
+
+### Hook 模块 (lib/hooks/)
+- `auto_switch_source_hook.rb` - 源码/二进制缓存自动切换（pre_install、source_provider hook）
+- `installer.rb` - 安装器扩展（Podfile.local 支持、混淆源地址动态修改、Swift 版本检测）
+- `dependency.rb` - 依赖处理扩展（Swift 版本自动绑定、混淆库支持）
+- `version.rb` - 版本号处理扩展（.swift 后缀兼容）
+- `podfile.rb` - Podfile 后处理（部署目标、签名配置）
+- `project.rb` - 项目扩展（Podfile.local 添加到项目）
+
+## 关键配置
+
+### 环境变量
+- `USE_FRAMEWORK` - 设为 '1' 启用二进制模式
 - `GIT_LAB_HOST` - GitLab 服务器地址
-- `GIT_LAB_TOKEN` - GitLab API 令牌
-- `USE_FRAMEWORK` - 启用二进制模式
+- `GIT_LAB_TOKEN` - GitLab API Token
+- `USE_DEV_FRAMEWORK_<NAME>` - 指定组件使用开发版本
+
+### Podfile DSL 扩展
+
+```ruby
+plugin 'cocoapods-publish'
+
+# 启用二进制模式
+baitu_use_frameworks!
+
+# 启用混淆模块
+baitu_mixup_module!('MODULE_NAME')
+```
+
+## 版本号规则
+
+- 基础版本：`1.0.0`
+- Beta 版本：`1.0.0.b1`
+- Swift 版本：`1.0.0.swift-5.9`
+- 分支版本：`1.0.0.BRANCH_NAME`
+- 混淆版本：`1.0.0.MNL-C`（类混淆）、`1.0.0.MNL-CF`（类+函数混淆）、`1.0.0.MNL-SC`（subspec+类）
+
+## 开发注意事项
+
+- 代码遵循 Ruby/CocoaPods 风格
+- 使用 alias 方式扩展 CocoaPods 原生类方法
+- Hook 注册使用 `Pod::HooksManager.register`
+- 日志输出使用 `puts` 配合 `.yellow`/`.green`/`.red` 颜色
