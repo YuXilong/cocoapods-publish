@@ -77,6 +77,14 @@ module Pod
                                        mixup_func_class_prefixes.split(',')
                                      end
 
+        # 属性混淆标志位
+        mixup_property_class_prefixes = argv.option('mixup-property-class-prefixes')
+        @mixup_property_class_prefixes = if mixup_property_class_prefixes.nil?
+                                            []
+                                          else
+                                            mixup_property_class_prefixes.split(',')
+                                          end
+
         # 不自增版本号
         @increase_version = argv.flag?('increase-version', true)
         super

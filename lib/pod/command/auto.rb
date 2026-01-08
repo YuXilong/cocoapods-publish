@@ -40,6 +40,7 @@ module Pod
           # 代码混淆配置项
           @auto_mixup = argv.flag?('mixup', false)
           @auto_mixup_func_class_prefixes = argv.option('mixup-func-class-prefixes', '')
+          @auto_mixup_property_class_prefixes = argv.option('mixup-property-class-prefixes', '')
           @auto_old_class_prefix = argv.option('old-class-prefix', 'BT')
           @auto_new_class_prefixes = argv.option('new-class-prefixes', '')
           @auto_filter_file_prefixes = argv.option('filter-file-prefixes', 'Target_,')
@@ -88,6 +89,7 @@ module Pod
             args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
             args.push('--mixup') if @auto_mixup
             args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
+            args.push("--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}") if @auto_mixup && !@auto_mixup_property_class_prefixes.empty?
             args.push('--from-wukong') if @from_wukong
             args.push('--beta') if @beta_version_auto
             args.push('--upgrade-swift') if @upgrade_swift_auto
@@ -110,6 +112,7 @@ module Pod
               args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
               args.push('--mixup') if @auto_mixup
               args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
+              args.push("--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}") if @auto_mixup && !@auto_mixup_property_class_prefixes.empty?
               args.push('--from-wukong') if @from_wukong
               args.push('--beta') if @beta_version_auto
               args.push('--upgrade-swift') if @upgrade_swift_auto
@@ -136,6 +139,7 @@ module Pod
             params << '--from-wukong' if @from_wukong
             params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
             params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
+            params << "--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}" unless @auto_mixup_property_class_prefixes.empty?
             argv = CLAide::ARGV.coerce(params)
             Publish.new(argv).run
             end_time = (Time.now.to_f * 1000).to_i
@@ -157,6 +161,7 @@ module Pod
           params << '--mixup-publish' if @auto_mixup
           params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
           params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
+          params << "--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}" unless @auto_mixup_property_class_prefixes.empty?
           params << '--no-increase-version' unless should_increase_version
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
