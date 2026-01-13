@@ -139,10 +139,8 @@ module Pod
       host = (ENV['GIT_LAB_HOST']).to_s.freeze
       analysis_result.specifications.filter { |spec| spec.name.start_with?('BT') }.each do |spec|
         name = spec.attributes_hash['name']
-        # 迁移域名
-        spec.root.source[:http].gsub!('gitlab.v.show', host) if spec.root.source[:http] && spec.root.source[:http].strip != ''
-        # spec.root.source[:http].gsub!(host, '47.100.39.127') if spec.root.source[:http] && spec.root.source[:http].strip != ''
-        # spec.root.source[:headers] << "Host: #{host}"
+        # 迁移域名（匹配所有 .v.show 结尾的域名）
+        spec.root.source[:http].gsub!(/[a-zA-Z0-9_.-]+\.v\.show/, host) if spec.root.source[:http] && spec.root.source[:http].strip != ''
         clean_spec(spec)
         if name.start_with?('Core') || name.eql?(spec.root.name)
           next unless spec.root.source[:git].nil?
@@ -160,8 +158,8 @@ module Pod
           http = spec.root.source[:http].to_s
           http.gsub('BT', mix)
         end
-        # 迁移域名
-        http.gsub!('gitlab.v.show', host) if http.strip != ''
+        # 迁移域名（匹配所有 .v.show 结尾的域名）
+        http.gsub!(/[a-zA-Z0-9_.-]+\.v\.show/, host) if http.strip != ''
         spec.root.source = {
           http: http,
           type: spec.root.source[:type],
