@@ -80,7 +80,11 @@ module Pod
           end
 
           if @continue_from_upload_auto
-            puts '-> 正在恢复上传版本...'.yellow
+            if @from_wukong
+              puts '-> 正在恢复上传版本...'
+            else
+              puts '-> 正在恢复上传版本...'.yellow
+            end
 
             args = [@podspec]
             args.push('--continue-from-upload') if @continue_from_upload_auto
@@ -127,14 +131,18 @@ module Pod
             end
           end
 
-          puts '-> 正在发布...'.yellow if @from_wukong
+          puts '-> 正在发布...' if @from_wukong
 
           # BTAssets不发布源码版本
           should_increase_version = true
           if !@beta_version_auto && !@upgrade_swift_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
-            puts '-> 正在发布到源码私有库...'.yellow
+            if @from_wukong
+              puts '-> 正在发布到源码私有库...'
+            else
+              puts '-> 正在发布到源码私有库...'.yellow
+            end
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
             params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
@@ -144,7 +152,11 @@ module Pod
             Publish.new(argv).run
             end_time = (Time.now.to_f * 1000).to_i
             duration = end_time - begin_time
-            puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
+            if @from_wukong
+              puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]"
+            else
+              puts "-> 已发布到源码私有库 [#{duration / 1000.0} sec]".green
+            end
             should_increase_version = false
           end
 
@@ -152,7 +164,11 @@ module Pod
 
           # 发布二进制
           begin_time = (Time.now.to_f * 1000).to_i
-          puts '-> 正在发布到二进制私有库...'.yellow
+          if @from_wukong
+            puts '-> 正在发布到二进制私有库...'
+          else
+            puts '-> 正在发布到二进制私有库...'.yellow
+          end
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
           params << '--beta' if @beta_version_auto
@@ -167,7 +183,11 @@ module Pod
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i
           duration = end_time - begin_time
-          puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]".green
+          if @from_wukong
+            puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]"
+          else
+            puts "-> 已发布到二进制私有库 [#{duration / 1000.0} sec]".green
+          end
           puts '-> 发布完成'.green unless @from_wukong
 
         end
