@@ -60,6 +60,7 @@ module Pod
       return version if version.is_a?(Array)
 
       # 判断是否已指定Swift版本号
+      version = version.to_s
       version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
 
       # 存储自动指定的版本号
