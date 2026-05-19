@@ -24,7 +24,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
 
   # 初始化缓存
   if !Dir.exist?(source_cache_root) && !Dir.exist?(framework_cache_root)
-    puts '初始化自定义缓存...'.yellow
+    puts '-> 初始化自定义缓存...'.yellow
     Dir.glob("#{cache_root}/**/BT*/")
        .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
@@ -56,7 +56,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
      .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
   # 切换仓库，同步缓存
-  puts '正在切换模式，同步缓存...'.yellow
+  puts '-> 正在切换模式，同步缓存...'.yellow
   if use_framework
     `rm -rf #{source_cache_root}`
     `cp -r #{target_root} #{source_cache_root}`
@@ -69,7 +69,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     `cp -r #{source_cache_root} #{target_root}`
   end
   fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
-  puts "已切换到#{use_framework ? '二进制' : '源码'}模式".green
+  puts "-> 已切换到#{use_framework ? '二进制' : '源码'}模式".green
 end
 
 # SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
@@ -123,14 +123,14 @@ def fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
       `rm #{file}`
       Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
       `rm -rf #{project_pods_root}/#{name}` if Dir.exist?("#{project_pods_root}/#{name}")
-      puts "已修正#{name}-#{version}缓存"
+      puts "-> 已修正#{name}-#{version}缓存"
     else
       next if tag == version
 
       `rm #{file}`
       Dir.glob("#{cache_root}/Pods/Release/#{name}/#{version}*").each { |source_dir| `rm -rf #{source_dir}` }
       Dir.glob("#{project_pods_root}/#{name}").each { |source_dir| `rm -rf #{source_dir}` }
-      puts "已修正#{name}-#{version}缓存"
+      puts "-> 已修正#{name}-#{version}缓存"
     end
 
   end

@@ -74,8 +74,8 @@ module Pod
           @is_assets_framework = @podspec.include?('BTAssets.podspec')
 
           if @beta_version_auto && get_current_branch == 'main'
-            puts 'main分支不支持发布Beta组件！'.red if @from_wukong
-            puts '-> main分支不支持发布Beta组件！'.red unless @from_wukong
+            # wukong 侧只解析 `->` 前缀做进度展示，这里统一输出结构化行
+            puts '-> main分支不支持发布Beta组件！'.red
             Process.exit(1)
           end
 
