@@ -139,14 +139,24 @@ module Pod
 
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").sort.reverse.select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
+      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
       return [] if folder_paths.empty?
 
-      spec_file = folder_paths[0]
+      spec_file = folder_paths.max_by { |folder| local_framework_version_sort_key(folder) }
       spec = Specification.from_file(spec_file)
       spec.attributes_hash['version']
+    end
+
+    def local_framework_version_sort_key(spec_file)
+      version = Pathname(spec_file).parent.basename.to_s.split('.swift').first
+      base_version, beta_version = version.split('.b', 2)
+      numeric_segments = base_version.scan(/\d+/).map(&:to_i)
+      beta_priority = beta_version.nil? ? 0 : 1
+      beta_number = beta_version.to_s[/\A\d+/].to_i
+
+      [numeric_segments, beta_priority, beta_number, version]
     end
 
     def swift_version_support?
