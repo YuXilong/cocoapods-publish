@@ -44,10 +44,11 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     mixup_libs_map[result[0]] = result[1]
   end
 
-  # /Users/yuxilong/Library/Caches/CocoaPods
-  is_using_framework = using_framework_specs(cache_root).count.positive?
+  # glob + JSON 解析只做一次，模式不变路径直接传给 fix_cache 复用
+  all_specs = load_bt_spec_files(cache_root)
+  is_using_framework = all_specs.any? { |s| s[:json]['source']['type'] == 'zip' }
   if (is_using_framework && use_framework) || (!is_using_framework && !use_framework)
-    fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
+    fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map, all_specs)
     next
   end
 
@@ -98,23 +99,27 @@ def reset_lockfile
   Pod::Config.instance.instance_variable_set(:@lockfile, nil)
 end
 
-def using_framework_specs(cache_root)
-  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").filter do |file|
-    json = JSON(File.open(file).read)
-    type = json['source']['type']
-    type == 'zip'
+# 单次 glob + JSON 解析，供 using_framework_specs 和 fix_cache 共享
+def load_bt_spec_files(cache_root)
+  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").map do |file|
+    { file: file, json: JSON(File.open(file).read) }
   end
 end
 
-# 修正本地缓存
-def fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
-  ignore_names = %w[BTDContext BTAssets]
+def using_framework_specs(cache_root)
+  load_bt_spec_files(cache_root).select { |s| s[:json]['source']['type'] == 'zip' }
+end
 
-  Dir.glob("#{cache_root}/Pods/Specs/Release/BT*/*.podspec.json").each do |file|
-    json = JSON(File.open(file).read)
+# 修正本地缓存；specs 由调用方传入时复用已有解析结果，避免二次 glob + JSON
+def fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map, specs = nil)
+  ignore_names = %w[BTDContext BTAssets]
+  specs ||= load_bt_spec_files(cache_root)
+
+  specs.each do |s|
+    file = s[:file]
+    json = s[:json]
     type = json['source']['type']
     tag = json['source']['tag']
-    http = json['source']['http']
     name = json['name']
     version = json['version']
     if use_framework

@@ -6,7 +6,18 @@ module Pod
     alias origin_initialize initialize
     alias origin_integrate_user_project integrate_user_project
 
-    SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
+    # swift 版本按天缓存到 /tmp，与 dependency.rb 共用同一缓存文件，避免二次起进程
+    def self.cached_swift_version
+      cache_file = "/tmp/.cocoapods_swift_ver_#{Time.now.strftime('%Y-%m-%d')}"
+      return File.read(cache_file).strip if File.exist?(cache_file)
+
+      ver = Open3.popen3('swift --version')[1].gets.to_s
+                 .gsub(/version (\d+(\.\d+)+)/).to_a[0].to_s.split(' ')[1].to_s
+      File.write(cache_file, ver) unless ver.empty?
+      ver
+    end
+
+    SWIFT_VERSION = cached_swift_version
 
     def initialize(sandbox, podfile, lockfile = nil)
       # podfile.dependencies.each { |dep| dep.covert_swift_necessnary }

@@ -1,6 +1,18 @@
 module Pod
   class Dependency
-    SWIFT_VERSION = Open3.popen3('xcrun swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
+    # swift 版本按天缓存到 /tmp，避免每次 require 都起子进程
+    def self.cached_swift_version
+      cache_file = "/tmp/.cocoapods_swift_ver_#{Time.now.strftime('%Y-%m-%d')}"
+      return File.read(cache_file).strip if File.exist?(cache_file)
+
+      ver = Open3.popen3('swift --version')[1].gets.to_s
+                 .gsub(/version (\d+(\.\d+)+)/).to_a[0].to_s.split(' ')[1].to_s
+      File.write(cache_file, ver) unless ver.empty?
+      ver
+    end
+
+    SWIFT_VERSION = cached_swift_version
+
     alias origin_initialize initialize
 
     # 混淆支持
@@ -39,8 +51,6 @@ module Pod
     def genrate_requirements(name, requirements)
       return requirements if requirements.empty?
 
-      # puts "-> 安装依赖前：#{name}, requirements:#{requirements}" if name == 'BTVideoCapture'
-
       # 获取当前的版本号
       version = requirements[0]
 
@@ -71,7 +81,6 @@ module Pod
         Dependency.specified_framework_versions[name] = version
       end
 
-      # puts "-> 安装依赖后：#{name}, requirements:#{version}" if name == 'BTVideoCapture'
       # 重新指定版本
       version
     end
@@ -96,40 +105,62 @@ module Pod
       @@source_dependenc ||= {}
     end
 
+    # swift_framework? 按组件名 memoize，单进程内只判断一次
+    def self.swift_framework_cache
+      @@swift_framework_cache ||= {}
+    end
+
+    # Podfile / Podfile.local 内容只读一次，避免每次 Dependency.new 都触发 File.read
+    def self.podfile_content
+      return @@podfile_content if defined?(@@podfile_content)
+
+      podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
+      podfile_local_path = "#{podfile_path}.local"
+      @@podfile_content = if File.exist?(podfile_local_path)
+                            File.read(podfile_local_path)
+                          elsif File.exist?(podfile_path)
+                            File.read(podfile_path)
+                          end
+    end
+
+    # local_framework_version 按组件名 memoize
+    def self.local_version_cache
+      @@local_version_cache ||= {}
+    end
+
     FW_EXCLUDE_NAMES = %w[BTDContext].freeze
     def swift_framework?(fw)
       return false if fw.nil?
       # 过滤白名单
       return false unless FW_EXCLUDE_NAMES.filter { |name| fw.include?(name) }.empty?
 
-      podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
-      podfile_local_path = "#{podfile_path}.local"
-      if File.exist?(podfile_local_path) || File.exist?(podfile_path)
-        content = File.read(podfile_local_path).to_s if File.exist?(podfile_local_path)
-        content = File.read(podfile_path).to_s unless File.exist?(podfile_local_path)
-        content&.gsub!(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
-        return false unless content.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
+      cache = Dependency.swift_framework_cache
+      return cache[fw] if cache.key?(fw)
+
+      content = Dependency.podfile_content
+      if content
+        # 非破坏性替换，避免污染缓存内容
+        check = content.gsub(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
+        return cache[fw] = false unless check.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
       else
         deps = Pod::Config.instance.podfile.to_hash['target_definitions'][0]['children'][0]['dependencies']
         if deps.keys.include?(fw) && !deps[fw].empty?
           h = deps[fw][0]
-          return false if h.is_a?(Hash) && !h[:path].nil? && h[:dev] == 1
+          return cache[fw] = false if h.is_a?(Hash) && !h[:path].nil? && h[:dev] == 1
         end
       end
 
-      fw = fw.split('/')[0] if fw.include?('/')
+      base_fw = fw.include?('/') ? fw.split('/')[0] : fw
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
-      # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/**/#{fw}.podspec").select { |entry| File.file?(entry) }
+      # 单层 glob（已知结构为 base_fw/VERSION/base_fw.podspec），去掉 ** 消除递归开销
+      folder_paths = Dir.glob("#{repo}/#{base_fw}/*/#{base_fw}.podspec").select { |entry| File.file?(entry) }
 
-      # 使用File.mtime获取每个文件夹的修改日期并进行排序
-      # spec_file = folder_paths.max_by { |folder| `cd #{repo} && git log --reverse --pretty=format:"%ad" -- .#{folder.gsub(repo, '')} | tail -n 1` }
       spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
-      return false if spec_file.nil?
+      return cache[fw] = false if spec_file.nil?
 
-      content = File.open(spec_file).read.to_s
-      !content.gsub(/source_files.*=.*.swift/).to_a.empty? ||
-        !content.gsub(%r{.swift-.*\.zip/raw\?ref=main}).to_a.empty?
+      spec_content = File.open(spec_file).read.to_s
+      cache[fw] = !spec_content.gsub(/source_files.*=.*.swift/).to_a.empty? ||
+                  !spec_content.gsub(%r{.swift-.*\.zip/raw\?ref=main}).to_a.empty?
     end
 
     def local_framework_version(fw)
@@ -137,16 +168,22 @@ module Pod
       version = get_min_dependency_version(fw)
       return version unless version.nil?
 
+      cache = Dependency.local_version_cache
+      return cache[fw] if cache.key?(fw)
+
       repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
       # 获取文件夹列表
       folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
-      return [] if folder_paths.empty?
+      if folder_paths.empty?
+        cache[fw] = []
+        return cache[fw]
+      end
 
       spec_file = folder_paths.max_by { |folder| local_framework_version_sort_key(folder) }
       spec = Specification.from_file(spec_file)
-      spec.attributes_hash['version']
+      cache[fw] = spec.attributes_hash['version']
     end
 
     def local_framework_version_sort_key(spec_file)
