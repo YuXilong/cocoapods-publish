@@ -53,6 +53,9 @@ module Pod
 
       apply_local_podfile if local_podfile_path.exist?
 
+      # Texture<3.2.0 主线程自锁修复：解析前把 Texture 依赖改成外部源（git+tag），含修复版本
+      inject_texture_external_source
+
       analyzer = origin_resolve_dependencies
 
       # 恢复警告级别
@@ -60,9 +63,6 @@ module Pod
 
       use_framework = ENV['USE_FRAMEWORK']
       check_http_source if use_framework
-
-      # Texture<3.2.0 的 spec source 替换为含 PR #2032 的官方 3.2.0 tag（源码/二进制模式都生效）
-      patch_texture_source
 
       analyzer
       end
@@ -155,38 +155,84 @@ module Pod
     # 跑 Tests 时永久卡死。官方 PR #2032（3.2.0 起合入）把碰 UIKit 的代码从 constructor
     # 挪到 destructor 修复此问题，但 3.2.0 未发布到公共 CocoaPods，默认仍装 3.1.0。
     #
-    # 这里在依赖解析后集中把 Texture 的 spec source 替换为含修复的 git tag，
-    # 保留自动初始化（无需各 app 手动 init），源码/二进制模式都生效，pod install 时集中修复。
+    # 实现：解析前把 Podfile 里的 Texture 依赖改写为「外部源」（git + tag，指向含修复的版本）。
+    # 必须在解析前改、且用外部源——否则 CocoaPods 按 lockfile 的版本判定 Texture「未变化」，
+    # 只改内存里的 spec.source 不会触发重新下载（日志打了但实际仍是旧 3.1.0 源码）。
+    # 外部源会写入 lockfile 的 CHECKOUT OPTIONS，checkout 变化即触发重下，版本标签也随之更新。
+    #
     # 目标按"本地是否配置了 BaiTu-iOS/baitu-specs 私有源"二选一：
     #   有 → 用我们 fork 的 3.1.0.BAITU（与自有版本体系一致、差异最小）
     #   无 → 回退官方 3.2.0 tag（公网可达）
+    # 保留各 subspec 选择（Texture/Core、Texture/Video 等逐个挂同一外部源，不引入 default_subspecs）。
+    # 用户若已自行 pin（外部源 / 含 BAITU / >=3.2.0）则整体跳过，不与用户冲突。
     # NO_TEXTURE_PATCH=1 可关闭。
     TEXTURE_VERSION_FIXED = '3.2.0'   # >= 此版本视为已含修复，跳过
     TEXTURE_FORK_SOURCE = { git: 'https://github.com/BaiTu-iOS/Texture.git', tag: '3.1.0.BAITU' }.freeze
     TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
     BAITU_SPECS_MARK = 'baitu-specs'
 
-    def patch_texture_source
+    def inject_texture_external_source
       return if ENV['NO_TEXTURE_PATCH'] == '1'
 
       target = baitu_specs_available? ? TEXTURE_FORK_SOURCE : TEXTURE_OFFICIAL_SOURCE
+      ext = { git: target[:git], tag: target[:tag] }
+      patched = []
 
-      analysis_result.specifications.each do |spec|
-        root = spec.root
-        next unless root.name == 'Texture'
-        # 已是 3.2.0+（含修复，可能用户已自行指定）则跳过，幂等
-        next unless root.version < Pod::Version.new(TEXTURE_VERSION_FIXED)
-        # 本地开发版 Texture 不动，避免覆盖用户本地调试
-        next if @sandbox.development_pods.key?(root.name)
-        # 已经指向目标 tag 则跳过
-        src = root.source || {}
-        next if src[:git] == target[:git] && src[:tag] == target[:tag]
+      @podfile.target_definitions.each do |label, td|
+        next if td.nil?
+        ih = td.instance_variable_get(:@internal_hash)
+        deps = ih && ih['dependencies']
+        next unless deps.is_a?(Array)
 
-        root.source = target.dup
-        puts "[cocoapods-publish] Texture #{root.version} 含主线程自锁缺陷，已替换 source → #{target[:git]} @ #{target[:tag]}（避免测试卡死）".yellow
+        texture_entries = deps.select { |d| texture_dep?(d) }
+        next if texture_entries.empty?
+        # 用户已自行控制（外部源 / pin 了含 BAITU 或 >=3.2.0 的版本）→ 不动该 target
+        next if texture_entries.any? { |d| texture_dep_user_controlled?(d) }
+
+        ih['dependencies'] = deps.map { |d| texture_dep?(d) ? { texture_dep_name(d) => [ext.dup] } : d }
+        td.instance_variable_set(:@internal_hash, ih)
+        patched << label
+      end
+
+      unless patched.empty?
+        puts "[cocoapods-publish] Texture 含主线程自锁缺陷，已为 [#{patched.join(', ')}] 注入外部源 → #{target[:git]} @ #{target[:tag]}（避免测试卡死）".yellow
       end
     rescue StandardError => e
-      puts "[cocoapods-publish] Texture source 替换跳过：#{e.message}".red
+      puts "[cocoapods-publish] Texture 外部源注入跳过：#{e.message}".red
+    end
+
+    # 依赖条目可能是 "Name" 字符串或 {"Name" => [requirements...]} 哈希
+    def texture_dep_name(dep)
+      dep.is_a?(Hash) ? dep.keys.first : dep
+    end
+
+    def texture_dep?(dep)
+      texture_dep_name(dep).to_s.split('/').first == 'Texture'
+    end
+
+    # 判断该 Texture 依赖是否已被用户显式控制，控制则不应覆盖
+    def texture_dep_user_controlled?(dep)
+      return false unless dep.is_a?(Hash)
+      reqs = dep.values.first
+      return false unless reqs.is_a?(Array)
+
+      reqs.any? do |r|
+        if r.is_a?(Hash)
+          true # 已是外部源（:git/:path/:podspec 等）
+        else
+          s = r.to_s
+          s.include?('BAITU') || texture_version_ge_fixed?(s)
+        end
+      end
+    end
+
+    # 版本需求是否 >= 修复版本（粗取数字部分，兼容 "3.2.0" / "~> 3.2" / ">= 3.2.0"）
+    def texture_version_ge_fixed?(req)
+      num = req.to_s[/\d+(\.\d+)*/]
+      return false unless num
+      Pod::Version.new(num) >= Pod::Version.new(TEXTURE_VERSION_FIXED)
+    rescue StandardError
+      false
     end
 
     # 检测本地是否配置了 BaiTu-iOS/baitu-specs 私有 spec 源：
