@@ -53,10 +53,12 @@ module Pod
 
       apply_local_podfile if local_podfile_path.exist?
 
-      # Texture<3.2.0 主线程自锁修复：解析前把 Texture 依赖改成外部源（git+tag），含修复版本
-      inject_texture_external_source
-
       analyzer = origin_resolve_dependencies
+
+      # Texture<3.2.0 主线程自锁修复：按实际用到的 subspec 注入外部源后重解析。
+      # 必须放在 check_http_source 之前——重解析会重建 analysis_result，
+      # 否则 check_http_source 对二进制源的改写会被丢弃。
+      analyzer = reresolve_for_texture_if_needed(analyzer)
 
       # 恢复警告级别
       $VERBOSE = original_verbose
@@ -155,15 +157,21 @@ module Pod
     # 跑 Tests 时永久卡死。官方 PR #2032（3.2.0 起合入）把碰 UIKit 的代码从 constructor
     # 挪到 destructor 修复此问题，但 3.2.0 未发布到公共 CocoaPods，默认仍装 3.1.0。
     #
-    # 实现：解析前把 Podfile 里的 Texture 依赖改写为「外部源」（git + tag，指向含修复的版本）。
-    # 必须在解析前改、且用外部源——否则 CocoaPods 按 lockfile 的版本判定 Texture「未变化」，
-    # 只改内存里的 spec.source 不会触发重新下载（日志打了但实际仍是旧 3.1.0 源码）。
-    # 外部源会写入 lockfile 的 CHECKOUT OPTIONS，checkout 变化即触发重下，版本标签也随之更新。
+    # 实现要点（关键：Texture 常是传递依赖，Podfile 里并不直接声明）：
+    #   1) 先正常解析一次，从 analysis_result.specs_by_target 查出每个 target 实际
+    #      用到的、未修复的 Texture subspec（如只用 Texture/Core）；
+    #   2) 把这些 subspec 作为「外部源」依赖（git+tag）精确注入到对应 target，
+    #      只注入用到的 subspec，绝不加根 Texture（fork 的 default_subspecs 有 6 个，会膨胀）；
+    #   3) 用改过的 @podfile 重新解析，使外部源进入依赖图。
+    #
+    # 为何必须用「外部源 + 重解析」而非改内存 spec.source：CocoaPods 按 lockfile 的版本/
+    # checksum 判定 pod 是否「变化」，只改内存 source 不会触发重新下载（日志打了但实际仍是
+    # 旧 3.1.0 源码）。外部源会写入 lockfile 的 CHECKOUT OPTIONS，checkout 变化即触发重下，
+    # 版本标签也随之更新为含修复版本。
     #
     # 目标按"本地是否配置了 BaiTu-iOS/baitu-specs 私有源"二选一：
     #   有 → 用我们 fork 的 3.1.0.BAITU（与自有版本体系一致、差异最小）
     #   无 → 回退官方 3.2.0 tag（公网可达）
-    # 保留各 subspec 选择（Texture/Core、Texture/Video 等逐个挂同一外部源，不引入 default_subspecs）。
     # 用户若已自行 pin（外部源 / 含 BAITU / >=3.2.0）则整体跳过，不与用户冲突。
     # NO_TEXTURE_PATCH=1 可关闭。
     TEXTURE_VERSION_FIXED = '3.2.0'   # >= 此版本视为已含修复，跳过
@@ -171,34 +179,42 @@ module Pod
     TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
     BAITU_SPECS_MARK = 'baitu-specs'
 
-    def inject_texture_external_source
-      return if ENV['NO_TEXTURE_PATCH'] == '1'
+    def reresolve_for_texture_if_needed(analyzer)
+      return analyzer if ENV['NO_TEXTURE_PATCH'] == '1'
+      return analyzer if texture_user_pinned?
+      return analyzer if @sandbox.development_pods.key?('Texture')
+
+      # 收集每个 target 实际用到的、未修复的 Texture subspec
+      inject_map = {}
+      analysis_result.specs_by_target.each do |td, specs|
+        tex = specs.select { |s| s.root.name == 'Texture' }
+        next if tex.empty?
+        next if tex.all? { |s| texture_spec_fixed?(s) }
+        inject_map[td] = tex.map(&:name).uniq # 如 ["Texture/Core"]
+      end
+      return analyzer if inject_map.empty?
 
       target = baitu_specs_available? ? TEXTURE_FORK_SOURCE : TEXTURE_OFFICIAL_SOURCE
       ext = { git: target[:git], tag: target[:tag] }
-      patched = []
 
-      @podfile.target_definitions.each do |label, td|
-        next if td.nil?
+      inject_map.each do |td, names|
         ih = td.instance_variable_get(:@internal_hash)
-        deps = ih && ih['dependencies']
-        next unless deps.is_a?(Array)
-
-        texture_entries = deps.select { |d| texture_dep?(d) }
-        next if texture_entries.empty?
-        # 用户已自行控制（外部源 / pin 了含 BAITU 或 >=3.2.0 的版本）→ 不动该 target
-        next if texture_entries.any? { |d| texture_dep_user_controlled?(d) }
-
-        ih['dependencies'] = deps.map { |d| texture_dep?(d) ? { texture_dep_name(d) => [ext.dup] } : d }
+        deps = (ih['dependencies'] || []).dup
+        # 去掉原有的同名 Texture(子)依赖，避免与外部源版本冲突
+        deps.reject! { |d| names.include?(texture_dep_name(d)) }
+        names.each { |n| deps << { n => [ext.dup] } }
+        ih['dependencies'] = deps
         td.instance_variable_set(:@internal_hash, ih)
-        patched << label
       end
 
-      unless patched.empty?
-        puts "[cocoapods-publish] Texture 含主线程自锁缺陷，已为 [#{patched.join(', ')}] 注入外部源 → #{target[:git]} @ #{target[:tag]}（避免测试卡死）".yellow
-      end
+      all_names = inject_map.values.flatten.uniq.sort
+      puts "[cocoapods-publish] Texture 含主线程自锁缺陷，已为 #{all_names.join(', ')} 注入外部源 → #{target[:git]} @ #{target[:tag]}，重新解析依赖（避免测试卡死）".yellow
+
+      # 用改过的 @podfile 重新解析：外部源进入依赖图并触发重下
+      origin_resolve_dependencies
     rescue StandardError => e
-      puts "[cocoapods-publish] Texture 外部源注入跳过：#{e.message}".red
+      puts "[cocoapods-publish] Texture 外部源注入失败，保持原解析：#{e.message}".red
+      analyzer
     end
 
     # 依赖条目可能是 "Name" 字符串或 {"Name" => [requirements...]} 哈希
@@ -210,27 +226,28 @@ module Pod
       texture_dep_name(dep).to_s.split('/').first == 'Texture'
     end
 
-    # 判断该 Texture 依赖是否已被用户显式控制，控制则不应覆盖
-    def texture_dep_user_controlled?(dep)
-      return false unless dep.is_a?(Hash)
-      reqs = dep.values.first
-      return false unless reqs.is_a?(Array)
-
-      reqs.any? do |r|
-        if r.is_a?(Hash)
-          true # 已是外部源（:git/:path/:podspec 等）
-        else
-          s = r.to_s
-          s.include?('BAITU') || texture_version_ge_fixed?(s)
-        end
-      end
+    # 解析出的 Texture spec 是否已含修复（版本 >=3.2.0 或带 BAITU 标记）
+    def texture_spec_fixed?(spec)
+      v = spec.version.to_s
+      return true if v.include?('BAITU')
+      Pod::Version.new(v[/\d+(\.\d+)*/].to_s) >= Pod::Version.new(TEXTURE_VERSION_FIXED)
+    rescue StandardError
+      false
     end
 
-    # 版本需求是否 >= 修复版本（粗取数字部分，兼容 "3.2.0" / "~> 3.2" / ">= 3.2.0"）
-    def texture_version_ge_fixed?(req)
-      num = req.to_s[/\d+(\.\d+)*/]
-      return false unless num
-      Pod::Version.new(num) >= Pod::Version.new(TEXTURE_VERSION_FIXED)
+    # 用户是否已在 Podfile 显式 pin Texture（外部源 / 含 BAITU），是则不覆盖
+    def texture_user_pinned?
+      @podfile.target_definitions.any? do |_label, td|
+        next false if td.nil?
+        ih = td.instance_variable_get(:@internal_hash)
+        deps = ih && ih['dependencies']
+        next false unless deps.is_a?(Array)
+        deps.any? do |d|
+          next false unless texture_dep?(d)
+          reqs = d.is_a?(Hash) ? d.values.first : nil
+          reqs.is_a?(Array) && reqs.any? { |r| r.is_a?(Hash) || r.to_s.include?('BAITU') }
+        end
+      end
     rescue StandardError
       false
     end

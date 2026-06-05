@@ -71,7 +71,7 @@ pod publish auto [NAME.podspec] [options]
 - `GIT_LAB_HOST` - GitLab 服务器地址
 - `GIT_LAB_TOKEN` - GitLab API Token
 - `USE_DEV_FRAMEWORK_<NAME>` - 指定组件使用开发版本
-- `NO_TEXTURE_PATCH` - 设为 '1' 关闭 Texture<3.2.0 的外部源注入（默认开启，修复主线程自锁致测试卡死）。机制：解析前把 Texture 依赖改写为外部源（git+tag，写入 lockfile CHECKOUT OPTIONS 触发重下）。目标按本地是否配置 `BaiTu-iOS/baitu-specs` 私有源二选一：有则用 fork 的 `3.1.0.BAITU`，无则回退官方 `3.2.0` tag。用户已自行 pin（外部源/含 BAITU/>=3.2.0）则跳过
+- `NO_TEXTURE_PATCH` - 设为 '1' 关闭 Texture<3.2.0 的外部源注入（默认开启，修复主线程自锁致测试卡死）。机制：先解析一次，从 `specs_by_target` 查出实际用到的未修复 Texture subspec（Texture 常是传递依赖，Podfile 不直接声明），只为这些 subspec 注入外部源（git+tag）后重解析；外部源写入 lockfile CHECKOUT OPTIONS 触发重下，版本标签更新为修复版。目标按本地是否配置 `BaiTu-iOS/baitu-specs` 私有源二选一：有则用 fork 的 `3.1.0.BAITU`，无则回退官方 `3.2.0` tag。用户已自行 pin（外部源/含 BAITU）则跳过
 
 ### Podfile DSL 扩展
 
