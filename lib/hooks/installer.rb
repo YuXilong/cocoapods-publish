@@ -61,6 +61,9 @@ module Pod
       use_framework = ENV['USE_FRAMEWORK']
       check_http_source if use_framework
 
+      # Texture<3.2.0 的 spec source 替换为含 PR #2032 的官方 3.2.0 tag（源码/二进制模式都生效）
+      patch_texture_source
+
       analyzer
       end
 
@@ -143,6 +146,64 @@ module Pod
 
       internal_hash['dependencies'] = dependencies
       @podfile.target_definitions[project_def.label.gsub('Pods-', '')].instance_variable_set(:@internal_hash, internal_hash)
+    end
+
+    # Texture（AsyncDisplayKit）< 3.2.0 主线程自锁修复
+    #
+    # 3.1.0 在 load 时的构造函数里于主线程创建 UIView 读取 UIKit 图层默认值，
+    # 触发 +[UIScreen initialize] 的 dispatch_once 等待 app 初始化上下文 → 主线程自锁，
+    # 跑 Tests 时永久卡死。官方 PR #2032（3.2.0 起合入）把碰 UIKit 的代码从 constructor
+    # 挪到 destructor 修复此问题，但 3.2.0 未发布到公共 CocoaPods，默认仍装 3.1.0。
+    #
+    # 这里在依赖解析后集中把 Texture 的 spec source 替换为含修复的 git tag，
+    # 保留自动初始化（无需各 app 手动 init），源码/二进制模式都生效，pod install 时集中修复。
+    # 目标按"本地是否配置了 BaiTu-iOS/baitu-specs 私有源"二选一：
+    #   有 → 用我们 fork 的 3.1.0.BAITU（与自有版本体系一致、差异最小）
+    #   无 → 回退官方 3.2.0 tag（公网可达）
+    # NO_TEXTURE_PATCH=1 可关闭。
+    TEXTURE_VERSION_FIXED = '3.2.0'   # >= 此版本视为已含修复，跳过
+    TEXTURE_FORK_SOURCE = { git: 'https://github.com/BaiTu-iOS/Texture.git', tag: '3.1.0.BAITU' }.freeze
+    TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
+    BAITU_SPECS_MARK = 'baitu-specs'
+
+    def patch_texture_source
+      return if ENV['NO_TEXTURE_PATCH'] == '1'
+
+      target = baitu_specs_available? ? TEXTURE_FORK_SOURCE : TEXTURE_OFFICIAL_SOURCE
+
+      analysis_result.specifications.each do |spec|
+        root = spec.root
+        next unless root.name == 'Texture'
+        # 已是 3.2.0+（含修复，可能用户已自行指定）则跳过，幂等
+        next unless root.version < Pod::Version.new(TEXTURE_VERSION_FIXED)
+        # 本地开发版 Texture 不动，避免覆盖用户本地调试
+        next if @sandbox.development_pods.key?(root.name)
+        # 已经指向目标 tag 则跳过
+        src = root.source || {}
+        next if src[:git] == target[:git] && src[:tag] == target[:tag]
+
+        root.source = target.dup
+        puts "[cocoapods-publish] Texture #{root.version} 含主线程自锁缺陷，已替换 source → #{target[:git]} @ #{target[:tag]}（避免测试卡死）".yellow
+      end
+    rescue StandardError => e
+      puts "[cocoapods-publish] Texture source 替换跳过：#{e.message}".red
+    end
+
+    # 检测本地是否配置了 BaiTu-iOS/baitu-specs 私有 spec 源：
+    # 1) Podfile 通过 source 'xxx/baitu-specs.git' 声明；2) 已安装到 ~/.cocoapods/repos 的 spec repo。
+    def baitu_specs_available?
+      podfile_sources = (@podfile.sources rescue nil) || []
+      return true if podfile_sources.any? { |s| s.to_s.downcase.include?(BAITU_SPECS_MARK) }
+
+      repos_dir = File.expand_path('~/.cocoapods/repos')
+      return false unless File.directory?(repos_dir)
+
+      Dir.glob(File.join(repos_dir, '*')).any? do |repo|
+        cfg = File.join(repo, '.git', 'config')
+        File.file?(cfg) && File.read(cfg).downcase.include?(BAITU_SPECS_MARK)
+      end
+    rescue StandardError
+      false
     end
 
     # 根据混淆模式动态修改对应地址

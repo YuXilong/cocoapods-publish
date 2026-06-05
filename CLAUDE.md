@@ -58,7 +58,7 @@ pod publish auto [NAME.podspec] [options]
 
 ### Hook 模块 (lib/hooks/)
 - `auto_switch_source_hook.rb` - 源码/二进制缓存自动切换（pre_install、source_provider hook）
-- `installer.rb` - 安装器扩展（Podfile.local 支持、混淆源地址动态修改、Swift 版本检测）
+- `installer.rb` - 安装器扩展（Podfile.local 支持、混淆源地址动态修改、Swift 版本检测、Texture<3.2.0 主线程自锁修复）
 - `dependency.rb` - 依赖处理扩展（Swift 版本自动绑定、混淆库支持）
 - `version.rb` - 版本号处理扩展（.swift 后缀兼容）
 - `podfile.rb` - Podfile 后处理（部署目标、签名配置）
@@ -71,6 +71,7 @@ pod publish auto [NAME.podspec] [options]
 - `GIT_LAB_HOST` - GitLab 服务器地址
 - `GIT_LAB_TOKEN` - GitLab API Token
 - `USE_DEV_FRAMEWORK_<NAME>` - 指定组件使用开发版本
+- `NO_TEXTURE_PATCH` - 设为 '1' 关闭 Texture<3.2.0 的 spec source 替换（默认开启，修复主线程自锁致测试卡死）。目标按本地是否配置 `BaiTu-iOS/baitu-specs` 私有源二选一：有则用 fork 的 `3.1.0.BAITU`，无则回退官方 `3.2.0` tag
 
 ### Podfile DSL 扩展
 
