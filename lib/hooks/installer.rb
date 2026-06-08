@@ -93,6 +93,9 @@ module Pod
           File.rename(file, file.gsub('.bak', '')) if file
         end
       end
+
+      patch_text_layout_chained_comparison
+      patch_afnetworking_private_netinet6_header
     end
 
     alias origin_write_lockfiles write_lockfiles
@@ -178,6 +181,22 @@ module Pod
     TEXTURE_FORK_SOURCE = { git: 'https://github.com/BaiTu-iOS/Texture.git', tag: '3.1.0.BAITU' }.freeze
     TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
     BAITU_SPECS_MARK = 'baitu-specs'
+    TEXT_LAYOUT_CHAINED_COMPARISON_RELATIVE_PATHS = [
+      File.join('YYKit', 'YYKit', 'Text', 'Component', 'YYTextLayout.m'),
+      File.join('YYText', 'YYText', 'Component', 'YYTextLayout.m'),
+      File.join('YYText', 'YYText', 'Classes', 'Component', 'YYTextLayout.m'),
+      File.join('Texture', 'Source', 'TextExperiment', 'Component', 'ASTextLayout.mm')
+    ].freeze
+    TEXT_LAYOUT_CHAINED_COMPARISON_PATCHES = {
+      'position = fabs(left - point.y) < fabs(right - point.y) < (right ? prev : next);' =>
+        'position = (fabs(left - point.y) < fabs(right - point.y)) ? prev : next;',
+      'position = fabs(left - point.x) < fabs(right - point.x) < (right ? prev : next);' =>
+        'position = (fabs(left - point.x) < fabs(right - point.x)) ? prev : next;'
+    }.freeze
+    AFNETWORKING_NETINET6_HEADER_RELATIVE_PATHS = [
+      File.join('AFNetworking', 'AFNetworking', 'AFHTTPSessionManager.m'),
+      File.join('AFNetworking', 'AFNetworking', 'AFNetworkReachabilityManager.m')
+    ].freeze
 
     def reresolve_for_texture_if_needed(analyzer)
       return analyzer if ENV['NO_TEXTURE_PATCH'] == '1'
@@ -215,6 +234,47 @@ module Pod
     rescue StandardError => e
       puts "[cocoapods-publish] Texture 外部源注入失败，保持原解析：#{e.message}".red
       analyzer
+    end
+
+    # Xcode 26 将 Objective-C 链式比较 `X < Y < Z` 视为硬错误。
+    # YYKit/YYText/Texture 的 text layout 源码中本意是按距离选择 prev/next，需显式改成三元表达式。
+    def patch_text_layout_chained_comparison
+      TEXT_LAYOUT_CHAINED_COMPARISON_RELATIVE_PATHS.each do |relative_path|
+        file = File.join(@sandbox.root.to_s, relative_path)
+        next unless File.file?(file)
+
+        content = File.read(file)
+        patched = TEXT_LAYOUT_CHAINED_COMPARISON_PATCHES.reduce(content) do |memo, (from, to)|
+          memo.gsub(from, to)
+        end
+        next if patched == content
+
+        File.chmod(0o644, file) unless File.writable?(file)
+        File.write(file, patched)
+        fixed_count = content.scan(/position = fabs\(left - point\.[xy]\) < fabs\(right - point\.[xy]\) < \(right \? prev : next\);/).size
+        puts "[cocoapods-publish] 已修复 #{relative_path} 的 text layout 链式比较（#{fixed_count} 处），兼容 Xcode 26".green
+      end
+    rescue StandardError => e
+      puts "[cocoapods-publish] text layout 链式比较修复失败，继续安装：#{e.message}".yellow
+    end
+
+    # Xcode 26 模块校验禁止从模块外直接导入 netinet6/in6.h。
+    # AFNetworking 已导入公开的 netinet/in.h，IPv6 sockaddr 声明由该公开头提供。
+    def patch_afnetworking_private_netinet6_header
+      AFNETWORKING_NETINET6_HEADER_RELATIVE_PATHS.each do |relative_path|
+        file = File.join(@sandbox.root.to_s, relative_path)
+        next unless File.file?(file)
+
+        content = File.read(file)
+        patched = content.gsub(/^\s*#import\s+<netinet6\/in6\.h>\s*\n/, '')
+        next if patched == content
+
+        File.chmod(0o644, file) unless File.writable?(file)
+        File.write(file, patched)
+        puts "[cocoapods-publish] 已移除 #{relative_path} 的私有头 <netinet6/in6.h>，兼容 Xcode 26".green
+      end
+    rescue StandardError => e
+      puts "[cocoapods-publish] AFNetworking 私有头修复失败，继续安装：#{e.message}".yellow
     end
 
     # 依赖条目可能是 "Name" 字符串或 {"Name" => [requirements...]} 哈希
