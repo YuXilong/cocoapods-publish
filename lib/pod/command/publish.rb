@@ -20,6 +20,7 @@ module Pod
           %w[--sources 指定依赖的组件仓库.],
           %w[--publish-framework 指定发布framework.],
           %w[--from-wukong 发起者为`wukong`],
+          %w[--debug 输出详细构建日志],
           %w[--beta 发布beta版本],
           %w[--upgrade-swift 升级Swift版本],
           %w[--subspecs 同时构建的subspec],
@@ -38,6 +39,7 @@ module Pod
         @spec = spec_with_path(@name)
         @publish_framework = argv.flag?('publish-framework', false) || @source.eql?('BaiTuFrameworkPods')
         @from_wukong = argv.flag?('from-wukong', false)
+        @debug = argv.flag?('debug', false)
 
         # 构建子subspec支持
         subspecs = argv.option('subspecs')
@@ -175,10 +177,10 @@ module Pod
         version = code_version
         branch = get_current_branch
 
-        command = "git add . && git commit -m \"[Update] (#{version})\""
-        command += " && git push origin #{branch} --quiet"
+        command = "git add . && #{git_commit_command(version)}"
+        command += " && #{git_push_branch_command(branch)}"
 
-        config.silent = true
+        config.silent = !@debug
         output = `#{command}`.lines
         config.silent = false
 
@@ -271,7 +273,7 @@ module Pod
       # 验证.podspec 执行 pod lib lint xxx.podspec
       def validate_podspec
         UI.puts "-> 验证#{@name}...".yellow
-        config.silent = true
+        config.silent = !@debug
         validator = Validator.new(@spec, @sources)
         validator.local = true
         validator.no_clean = false
@@ -517,7 +519,7 @@ module Pod
 
       # 检查当前仓库状态
       def check_repo_status
-        create_tag if check_tag
+        create_tag
       end
 
       def check_tag
@@ -532,13 +534,17 @@ module Pod
 
         command = "cd #{@project_path}"
         command += ' && git add .'
-        command += " && git commit -m \"[Update] (#{@new_version})\""
+        command += " && #{git_commit_command(@new_version)}"
         # command += ' && git fetch'
         # command += " && git pull origin #{branch}"
-        command += " && git tag -a #{@new_version} -m \"[Update] (#{@new_version})\""
-        command += " && git push origin #{branch} --tags --quiet"
+        git_recreate_tag_commands(@new_version).each do |cmd|
+          command += " && #{cmd}"
+        end
+        command += " && #{git_push_branch_command(branch)}"
+        command += " && #{git_delete_remote_tag_command(@new_version)}"
+        command += " && #{git_push_tag_command(@new_version)}"
 
-        config.silent = true
+        config.silent = !@debug
         output = `#{command}`.lines
         UI.puts
         config.silent = false
@@ -558,10 +564,10 @@ module Pod
 
         command = "cd #{@project_path}"
         command += ' && git add .'
-        command += " && git commit -m \"[Update] (#{@new_version})\""
-        command += " && git push origin #{branch} --quiet"
+        command += " && #{git_commit_command(@new_version)}"
+        command += " && #{git_push_branch_command(branch)}"
 
-        config.silent = true
+        config.silent = !@debug
         output = `#{command}`.lines
         UI.puts
         config.silent = false
@@ -579,17 +585,40 @@ module Pod
         `git symbolic-ref --short HEAD`.to_s.chomp
       end
 
+      def git_commit_command(version)
+        "git commit --no-verify -m \"[Update] (#{version})\""
+      end
+
+      def git_push_branch_command(branch)
+        "git push --no-verify origin #{branch} --quiet"
+      end
+
+      def git_push_tag_command(tag)
+        "git push --no-verify origin refs/tags/#{tag} --force --quiet"
+      end
+
+      def git_delete_remote_tag_command(tag)
+        "(git push --no-verify origin :refs/tags/#{tag} --quiet >/dev/null 2>&1 || true)"
+      end
+
+      def git_recreate_tag_commands(tag)
+        [
+          "(git tag -d #{tag} >/dev/null 2>&1 || true)",
+          "git tag -a #{tag} -m \"[Update] (#{tag})\"",
+        ]
+      end
+
       # 推送新版本到私有库
       def push_pods
         UI.puts "-> 发布新版本(#{@new_version})...".yellow unless @from_wukong
-        config.silent = true
+        config.silent = !@debug
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green unless @from_wukong
-          config.silent = true
+          config.silent = !@debug
         rescue StandardError => e
           restore_old_version_to_podspec
           config.silent = false
@@ -602,14 +631,14 @@ module Pod
       def push_framework_pod
         version = @push_spec.attributes_hash['version']
         UI.puts "-> 正在发布新版本(#{version})...".yellow unless @from_wukong
-        config.silent = true
+        config.silent = !@debug
         argv = CLAide::ARGV.coerce([@source, @push_podspec_file, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
-          config.silent = true
+          config.silent = !@debug
         rescue StandardError => e
           clean
           config.silent = false
@@ -621,7 +650,7 @@ module Pod
       def push_pod_to_github
         version = @spec.attributes_hash['version']
         UI.puts "-> 正在发布新版本(#{version})...".yellow unless @from_wukong
-        config.silent = true
+        config.silent = !@debug
         argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', '--sources=trunk'])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
@@ -630,7 +659,7 @@ module Pod
           command.run
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
-          config.silent = true
+          config.silent = !@debug
         rescue StandardError => e
           restore_old_version_to_podspec if @beta_version_publish
           config.silent = false

@@ -21,6 +21,7 @@ module Pod
             %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开],
             %w[--filter-file-prefixes 混淆时要忽略的文件前缀，多个用,隔开.默认为：`Target_`],
             %w[--from-wukong 发起者为`wukong`],
+            %w[--debug 输出详细构建日志],
             %w[--beta 发布beta版本],
             %w[--upgrade-swift 升级Swift版本],
             %w[--continue-from-upload 从上传任务恢复发布],
@@ -47,6 +48,9 @@ module Pod
 
           # 更新本地缓存
           @clean_cache = argv.flag?('clean-cache', false)
+
+          # 输出详细构建日志
+          @debug = argv.flag?('debug', false)
 
           # 发布beta版本
           @beta_version_auto = argv.flag?('beta', false)
@@ -90,6 +94,7 @@ module Pod
             args.push('--continue-from-upload') if @continue_from_upload_auto
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
+            args.push('--debug') if @debug
             args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
             args.push('--mixup') if @auto_mixup
             args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
@@ -113,6 +118,7 @@ module Pod
               args = [@podspec]
               args.push('--local', '--no-show-tips') if @local
               args.push('--clean-cache') if @clean_cache
+              args.push('--debug') if @debug
               args.push("--subspecs=#{@auto_subspecs}") unless @auto_subspecs.nil?
               args.push('--mixup') if @auto_mixup
               args.push("--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}") if @auto_mixup
@@ -145,6 +151,7 @@ module Pod
             end
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
             params << '--from-wukong' if @from_wukong
+            params << '--debug' if @debug
             params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
             params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
             params << "--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}" unless @auto_mixup_property_class_prefixes.empty?
@@ -171,6 +178,7 @@ module Pod
           end
           params = ['BaiTuFrameworkPods', @podspec]
           params << '--from-wukong' if @from_wukong
+          params << '--debug' if @debug
           params << '--beta' if @beta_version_auto
           params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
           params << '--upgrade-swift' if @upgrade_swift_auto
@@ -228,4 +236,3 @@ module Pod
     end
   end
 end
-
