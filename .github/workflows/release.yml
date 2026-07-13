@@ -1,0 +1,183 @@
+name: Release cocoapods-publish
+
+# TODO: 修复现有 specs 基线后恢复 push main + lib/** 自动触发，并移除
+# Test 步骤的 continue-on-error。
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: Version bump type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: cocoapods-publish-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  ASSET_BUCKET_REPO: YuXilong/cocoapods-publish
+  ASSET_BUCKET_TAG: v2.2.0
+  VERSION_FILE: lib/cocoapods-publish.rb
+  GEM_NAME: cocoapods-publish
+
+jobs:
+  release:
+    name: Build and release
+    if: >-
+      github.event_name != 'push' ||
+      github.actor != 'github-actions[bot]' ||
+      !startsWith(github.event.head_commit.message, 'chore: bump version')
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+
+      - name: Test
+        continue-on-error: true
+        run: bundle exec rake specs
+
+      - name: Calculate new version
+        id: version
+        env:
+          VERSION_BUMP: ${{ inputs.version_bump }}
+        run: |
+          CURRENT=$(ruby -Ilib -e "require './lib/cocoapods-publish'; print Pod::Publish::VERSION")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "$VERSION_BUMP" in
+            major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+            *) echo "不支持的版本递增类型: $VERSION_BUMP"; exit 1 ;;
+          esac
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "新版本: $CURRENT -> $NEW_VERSION"
+
+      - name: Update version and lockfile
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new }}
+        run: |
+          ruby <<'RUBY'
+          path = ENV.fetch('VERSION_FILE')
+          version = ENV.fetch('NEW_VERSION')
+          content = File.read(path)
+          updated = content.sub(
+            /VERSION = ['"][^'"]+['"]\.freeze/,
+            "VERSION = '#{version}'.freeze"
+          )
+          abort "未找到 VERSION 常量" if updated == content
+          File.write(path, updated)
+          RUBY
+          bundle lock --local
+
+      - name: Build gem
+        id: gem
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new }}
+        run: |
+          gem build cocoapods-publish.gemspec
+          GEM_FILE="${GEM_NAME}-${NEW_VERSION}.gem"
+          test -f "$GEM_FILE"
+          echo "file=$GEM_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload new gem to asset bucket
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEM_FILE: ${{ steps.gem.outputs.file }}
+        run: |
+          gh release upload "$ASSET_BUCKET_TAG" "$GEM_FILE" \
+            --repo "$ASSET_BUCKET_REPO" \
+            --clobber
+
+      - name: Delete old gem assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEM_FILE: ${{ steps.gem.outputs.file }}
+        run: |
+          ASSETS=$(gh release view "$ASSET_BUCKET_TAG" \
+            --repo "$ASSET_BUCKET_REPO" \
+            --json assets \
+            --jq ".assets[] | select(.name | startswith(\"${GEM_NAME}-\")) | .name")
+
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            [ "$asset" = "$GEM_FILE" ] && continue
+            gh release delete-asset "$ASSET_BUCKET_TAG" "$asset" \
+              --repo "$ASSET_BUCKET_REPO" \
+              --yes
+          done <<< "$ASSETS"
+
+      - name: Commit version bump
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$VERSION_FILE" Gemfile.lock
+          git commit -m "chore: bump version to ${NEW_VERSION}"
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "推送版本提交失败，远端 main 持续前进"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Create prerelease archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.version.outputs.new }}
+          GEM_FILE: ${{ steps.gem.outputs.file }}
+        run: |
+          TAG="v${NEW_VERSION}"
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            git log "${PREV_TAG}"..HEAD --pretty=format:"- %s" --no-merges > release_notes.md
+          else
+            git log -10 --pretty=format:"- %s" --no-merges > release_notes.md
+          fi
+          [ -s release_notes.md ] || echo "- 发布 ${NEW_VERSION}" > release_notes.md
+
+          gh release create "$TAG" "$GEM_FILE" \
+            --repo "${{ github.repository }}" \
+            --target "$(git rev-parse HEAD)" \
+            --title "${GEM_NAME} ${TAG}" \
+            --notes-file release_notes.md \
+            --prerelease
+
+      - name: Summary
+        env:
+          NEW_VERSION: ${{ steps.version.outputs.new }}
+        run: |
+          {
+            echo "## ${GEM_NAME} ${NEW_VERSION}"
+            echo "- 已上传到固定资产桶 ${ASSET_BUCKET_TAG}"
+            echo "- 已创建 prerelease 存档，固定资产桶继续保持 latest"
+          } >> "$GITHUB_STEP_SUMMARY"
