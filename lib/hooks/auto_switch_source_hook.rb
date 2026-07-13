@@ -12,7 +12,7 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
 
   # 未启用插件统一走源码
   unless context.podfile.plugins.keys.include?('cocoapods-publish')
-    `cp -r #{source_cache_root} #{target_root}` if Dir.exist?(source_cache_root)
+    fast_copy_tree(source_cache_root, target_root)
     next
   end
 
@@ -32,8 +32,8 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     Dir.glob("#{project_pods_root}/**/BT*/")
        .each { |path| `rm -rf #{path}` if Dir.exist?(path) }
 
-    `cp -r #{target_root} #{source_cache_root}`
-    `cp -r #{target_root} #{framework_cache_root}`
+    fast_copy_tree(target_root, source_cache_root)
+    fast_copy_tree(target_root, framework_cache_root)
     next
   end
 
@@ -59,18 +59,32 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
   # 切换仓库，同步缓存
   puts '-> 正在切换模式，同步缓存...'.yellow
   if use_framework
-    `rm -rf #{source_cache_root}`
-    `cp -r #{target_root} #{source_cache_root}`
-    `rm -rf #{target_root}`
-    `cp -r #{framework_cache_root} #{target_root}`
+    FileUtils.rm_rf(source_cache_root)
+    fast_copy_tree(target_root, source_cache_root)
+    FileUtils.rm_rf(target_root)
+    fast_copy_tree(framework_cache_root, target_root)
   else
-    `rm -rf #{framework_cache_root}`
-    `cp -r #{target_root} #{framework_cache_root}`
-    `rm -rf #{target_root}`
-    `cp -r #{source_cache_root} #{target_root}`
+    FileUtils.rm_rf(framework_cache_root)
+    fast_copy_tree(target_root, framework_cache_root)
+    FileUtils.rm_rf(target_root)
+    fast_copy_tree(source_cache_root, target_root)
   end
   fix_cache(cache_root, project_pods_root, use_framework, mixup_libs_map)
   puts "-> 已切换到#{use_framework ? '二进制' : '源码'}模式".green
+end
+
+# APFS clonefile（写时复制）复制整树：GB 级 Pods 缓存从分钟级物理拷贝降为近乎瞬时的
+# 元数据操作；非 APFS 卷或旧系统不支持 -c 时回退普通复制。macOS 的 cp -R 与 -r 语义
+# 相同（man cp："-r Same as -R"）。system 数组形式同时规避路径含空格时的拼接问题。
+def fast_copy_tree(src, dst)
+  return unless Dir.exist?(src)
+
+  dst_existed = File.exist?(dst)
+  return if system('cp', '-Rc', src, dst, err: File::NULL)
+
+  # 清理 clonefile 半途失败的残留，避免回退复制因 dst 已存在而变成嵌套拷贝
+  FileUtils.rm_rf(dst) unless dst_existed
+  system('cp', '-R', src, dst)
 end
 
 # SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
