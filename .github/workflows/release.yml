@@ -1,8 +1,10 @@
 name: Release cocoapods-publish
 
-# TODO: 修复现有 specs 基线后恢复 push main + lib/** 自动触发，并移除
-# Test 步骤的 continue-on-error。
+# TODO: 修复现有 specs 基线后移除 Test 步骤的 continue-on-error。
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version_bump:
@@ -57,7 +59,7 @@ jobs:
       - name: Calculate new version
         id: version
         env:
-          VERSION_BUMP: ${{ inputs.version_bump }}
+          VERSION_BUMP: ${{ inputs.version_bump || 'patch' }}
         run: |
           CURRENT=$(ruby -Ilib -e "require './lib/cocoapods-publish'; print Pod::Publish::VERSION")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
