@@ -90,7 +90,7 @@ jobs:
           abort "未找到 VERSION 常量" if updated == content
           File.write(path, updated)
           RUBY
-          bundle lock --local
+          bundle lock --update "$GEM_NAME" --local
 
       - name: Build gem
         id: gem
