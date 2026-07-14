@@ -89,8 +89,17 @@ jobs:
           )
           abort "未找到 VERSION 常量" if updated == content
           File.write(path, updated)
+
+          lock_path = 'Gemfile.lock'
+          gem_name = ENV.fetch('GEM_NAME')
+          lock_content = File.read(lock_path)
+          lock_pattern = /^(\s{4}#{Regexp.escape(gem_name)} \()[^)]+(\))$/
+          lock_updated = lock_content.sub(lock_pattern) do
+            "#{Regexp.last_match(1)}#{version}#{Regexp.last_match(2)}"
+          end
+          abort "未找到锁文件中的 path gem 版本" if lock_updated == lock_content
+          File.write(lock_path, lock_updated)
           RUBY
-          bundle lock --update "$GEM_NAME" --local
 
       - name: Build gem
         id: gem
