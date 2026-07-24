@@ -5,6 +5,11 @@ module Pod
     alias origin_resolve_dependencies resolve_dependencies
     alias origin_initialize initialize
     alias origin_integrate_user_project integrate_user_project
+    alias origin_create_analyzer create_analyzer
+
+    attr_accessor :precheck_dependencies
+
+    PRECHECK_HINT = '提示：可执行 `pod install --precheck` 一次性检查 Podfile 中所有找不到的依赖版本。'.freeze
 
     # swift 版本按天缓存到 /tmp，与 dependency.rb 共用同一缓存文件，避免二次起进程
     def self.cached_swift_version
@@ -67,7 +72,15 @@ module Pod
       check_http_source if use_framework
 
       analyzer
-      end
+    rescue NoSpecFoundError => e
+      raise unless precheck_dependencies == false
+
+      hinted_error = NoSpecFoundError.new("#{e.message}\n\n#{PRECHECK_HINT}")
+      hinted_error.set_backtrace(e.backtrace)
+      raise hinted_error
+    ensure
+      $VERBOSE = original_verbose
+    end
 
     def integrate_user_project
       res = origin_integrate_user_project
@@ -112,6 +125,12 @@ module Pod
     end
 
       private
+
+    def create_analyzer(plugin_sources = nil)
+      analyzer = origin_create_analyzer(plugin_sources)
+      analyzer.precheck_dependencies = precheck_dependencies
+      analyzer
+    end
 
     def local_podfile_path
       Pathname("#{@podfile.defined_in_file}.local")

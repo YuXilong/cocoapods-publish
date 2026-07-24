@@ -121,5 +121,37 @@ module Pod
 
       files.each { |file| should_have_removed_private_netinet6_import(file) }
     end
+
+    it 'suggests --precheck after a normal install cannot find a spec' do
+      @installer.precheck_dependencies = false
+      @installer.stubs(:local_podfile_path).returns(Pathname('/missing/Podfile.local'))
+      @installer.stubs(:origin_resolve_dependencies).
+        raises(NoSpecFoundError.new('MissingVersion (= 1.0.0)'))
+
+      error = lambda { @installer.resolve_dependencies }.should.raise NoSpecFoundError
+
+      error.message.should.include 'MissingVersion (= 1.0.0)'
+      error.message.should.include 'pod install --precheck'
+    end
+
+    it 'does not suggest --precheck when precheck is already enabled' do
+      @installer.precheck_dependencies = true
+      @installer.stubs(:local_podfile_path).returns(Pathname('/missing/Podfile.local'))
+      @installer.stubs(:origin_resolve_dependencies).
+        raises(NoSpecFoundError.new('MissingVersion (= 1.0.0)'))
+
+      error = lambda { @installer.resolve_dependencies }.should.raise NoSpecFoundError
+
+      error.message.should.not.include 'pod install --precheck'
+    end
+
+    it 'passes the precheck setting to the analyzer' do
+      analyzer = mock
+      @installer.precheck_dependencies = true
+      @installer.stubs(:origin_create_analyzer).returns(analyzer)
+      analyzer.expects(:precheck_dependencies=).with(true)
+
+      @installer.send(:create_analyzer).should.equal analyzer
+    end
   end
 end
