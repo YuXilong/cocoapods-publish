@@ -2,6 +2,12 @@ name: Test Jenkins connection
 
 on:
   workflow_dispatch:
+    inputs:
+      trigger_build:
+        description: Trigger the Jenkins toolchain update job
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -17,28 +23,44 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           JENKINS_USER: ${{ secrets.JENKINS_RELEASE_USER }}
           JENKINS_API_TOKEN: ${{ secrets.JENKINS_RELEASE_API_TOKEN }}
+          TRIGGER_BUILD: ${{ inputs.trigger_build }}
         run: |
           set -euo pipefail
 
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
+          method="GET"
+          expected_code="200"
+          target_url="https://jenkins.t-wk.com/api/json"
+
+          if [[ "$TRIGGER_BUILD" == "true" ]]; then
+            method="POST"
+            expected_code="201"
+            target_url="https://jenkins.t-wk.com/job/%E6%9B%B4%E6%96%B0%E6%9E%84%E5%BB%BA%E5%B7%A5%E5%85%B7%E9%93%BE/build"
+          fi
+
           http_code="$(
             curl --silent --show-error \
               --connect-timeout 10 \
               --max-time 30 \
+              --request "$method" \
               --user "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
               --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
               --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
               --output "$response_file" \
               --write-out '%{http_code}' \
-              "https://jenkins.t-wk.com/api/json"
+              "$target_url"
           )"
 
-          if [[ "$http_code" != "200" ]]; then
+          if [[ "$http_code" != "$expected_code" ]]; then
             echo "Jenkins 连通性检查失败，HTTP ${http_code}"
             sed -n '1,20p' "$response_file"
             exit 1
           fi
 
-          echo "Cloudflare Access 和 Jenkins API 认证成功。"
+          if [[ "$TRIGGER_BUILD" == "true" ]]; then
+            echo "Jenkins 更新任务已进入队列。"
+          else
+            echo "Cloudflare Access 和 Jenkins API 认证成功。"
+          fi
