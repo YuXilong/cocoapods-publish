@@ -40,6 +40,8 @@ jobs:
       github.actor != 'github-actions[bot]' ||
       !startsWith(github.event.head_commit.message, 'chore: bump version')
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -234,3 +236,28 @@ jobs:
           fi
 
           echo "Jenkins 更新任务已进入队列。"
+
+  notify-lark:
+    name: Notify Lark
+    needs: [release, trigger-jenkins]
+    if: ${{ always() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout notification script
+        uses: actions/checkout@v4
+
+      - name: Send release card
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LARK_WEBHOOK_URL: ${{ secrets.LARK_BOT_WEB_HOOK_URL }}
+          PRODUCT_NAME: cocoapods-publish
+          VERSION: ${{ needs.release.outputs.new_version }}
+          RELEASE_KIND: 预发布
+          UPGRADE_COMMAND: wukong update --pod-plugins
+          DELIVERY_LABEL: 固定资产桶
+          DELIVERY_RESULT: ${{ needs.release.result }}
+          JENKINS_RESULT: ${{ needs.trigger-jenkins.result }}
+        run: bash .github/scripts/notify-lark-release.sh
