@@ -21,6 +21,12 @@ module Pod
         command.instance_variable_get(:@debug).should == true
       end
 
+      it 'supports source-only auto publishing without requiring a binary artifact' do
+        command = Command.parse(%w{ publish auto --skip-framework-publish })
+
+        command.instance_variable_get(:@skip_framework_publish_auto).should == true
+      end
+
       it 'bypasses local hooks for generated version commits' do
         command = Command::Publish.allocate
 
@@ -37,6 +43,115 @@ module Pod
         ]
         command.send(:git_delete_remote_tag_command, '100.swift-6.2').
           should == '(git push --no-verify origin :refs/tags/100.swift-6.2 --quiet >/dev/null 2>&1 || true)'
+      end
+    end
+
+
+    describe 'XCFramework artifact validation' do
+      before do
+        @command = Command::Publish.allocate
+        @command.instance_variable_set(:@new_spec_name, 'MyKit')
+        @command.instance_variable_set(:@new_version, '101')
+      end
+
+      it 'accepts both simulator-capable and device-only manifests' do
+        supported = {
+          'schema_version' => 1,
+          'component' => { 'name' => 'MyKit', 'version' => '101' },
+          'artifact' => { 'type' => 'xcframework', 'path' => 'MyKit.xcframework', 'linkage' => 'static' },
+          'platforms' => {
+            'ios' => {
+              'device' => { 'status' => 'supported', 'architectures' => ['arm64'] },
+              'simulator' => { 'status' => 'supported', 'architectures' => %w[arm64 x86_64] },
+            },
+          },
+          'debug_symbols' => [],
+          'integrity' => { 'validated' => true },
+        }
+        device_only = Marshal.load(Marshal.dump(supported))
+        device_only['platforms']['ios']['simulator'] = {
+          'status' => 'unavailable',
+          'architectures' => [],
+        }
+
+        @command.send(:validate_artifact_manifest!, supported).should == supported
+        @command.send(:validate_artifact_manifest!, device_only).should == device_only
+      end
+
+      it 'rejects a stale sidecar for another artifact version' do
+        manifest = {
+          'schema_version' => 1,
+          'component' => { 'name' => 'MyKit', 'version' => '100' },
+          'artifact' => { 'type' => 'xcframework', 'path' => 'MyKit.xcframework', 'linkage' => 'static' },
+          'platforms' => {
+            'ios' => {
+              'device' => { 'status' => 'supported', 'architectures' => ['arm64'] },
+              'simulator' => { 'status' => 'unavailable', 'architectures' => [] },
+            },
+          },
+          'debug_symbols' => [],
+          'integrity' => { 'validated' => true },
+        }
+
+        should.raise Informative do
+          @command.send(:validate_artifact_manifest!, manifest)
+        end
+      end
+
+      it 'rewrites only the primary framework reference' do
+        content = <<~SPEC
+          s.vendored_frameworks = 'MyKit.framework', 'VendorSDK.framework'
+          s.resource_bundles = { 'MyKit' => ['Assets/*'] }
+        SPEC
+
+        rewritten = @command.send(
+          :rewrite_primary_framework_reference,
+          content,
+          'MyKit.xcframework'
+        )
+
+        rewritten.should.include("'MyKit.xcframework'")
+        rewritten.should.include("'VendorSDK.framework'")
+        rewritten.should.not.include("'MyKit.framework'")
+      end
+
+      it 'emits one structured capability record per published artifact' do
+        manifest = {
+          'component' => { 'name' => 'MyKit', 'version' => '101' },
+          'platforms' => {
+            'ios' => {
+              'device' => { 'architectures' => ['arm64'] },
+              'simulator' => { 'status' => 'unavailable', 'architectures' => [] },
+            },
+          },
+        }
+
+        record = @command.send(:artifact_capability_record, manifest)
+
+        record.should == {
+          'name' => 'MyKit',
+          'version' => '101',
+          'device' => ['arm64'],
+          'simulator' => [],
+          'status' => 'device_only',
+        }
+      end
+
+      it 'loads the sidecar from the same remote version directory as the zip' do
+        manifest = {
+          'schema_version' => 1,
+          'component' => { 'name' => 'MyKit', 'version' => '101' },
+        }
+        @command.stubs(:get_project_id).returns(42)
+        @command.expects(:send_request).with(
+          Command::Publish::GET,
+          '/projects/42/repository/files/101%2FMyKit-101.artifact.json',
+          { 'ref' => 'main' }
+        ).returns('content' => Base64.strict_encode64(JSON.generate(manifest)))
+
+        loaded = @command.send(:artifact_manifest_for_version, 'repository/files/101', '101')
+
+        loaded.should == manifest
       end
     end
   end

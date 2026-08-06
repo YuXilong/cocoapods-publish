@@ -25,6 +25,7 @@ module Pod
             %w[--beta 发布beta版本],
             %w[--upgrade-swift 升级Swift版本],
             %w[--continue-from-upload 从上传任务恢复发布],
+            %w[--skip-framework-publish 仅发布源码，跳过二进制产物发布],
             %w[--subspecs 同时构建的subspec]
           ]
         end
@@ -67,7 +68,15 @@ module Pod
           # 从上传任务恢复
           @continue_from_upload_auto = argv.flag?('continue-from-upload', false)
 
+          # 仅源码发布不读取 artifact manifest，也不触发二进制 Specs 推送。
+          @skip_framework_publish_auto = argv.flag?('skip-framework-publish', false)
+
+          from_wukong = argv.flag?('from-wukong', false)
+          debug = @debug
+
           super
+          @from_wukong = from_wukong
+          @debug = debug
         end
 
         def validate!; end
@@ -168,6 +177,11 @@ module Pod
           end
 
           should_increase_version = false if @upgrade_swift_auto
+
+          if @skip_framework_publish_auto
+            puts '-> 发布完成'.green unless @from_wukong
+            return
+          end
 
           # 发布二进制
           begin_time = (Time.now.to_f * 1000).to_i

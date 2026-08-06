@@ -114,7 +114,7 @@ module Pod
         if (200...300).include?(response.code.to_i)
           JSON(response.body)
         else
-          puts "-> 接口请求失败：#{uri}, Authorization: Bearer #{GITLAB_TOKEN}".red
+          puts "-> 接口请求失败：#{uri}".red
           puts "-> 响应Code：#{response.code}".red
           puts "-> 返回内容\n：#{JSON::pretty_generate(JSON(response.body))}".red
           clean

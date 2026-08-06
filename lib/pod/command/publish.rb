@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 require 'English'
+require 'base64'
+require 'json'
 require 'pod/command/auto'
+require 'uri'
 
 module Pod
   class Command
@@ -251,7 +254,9 @@ module Pod
                         else
                           "repository/files/#{version.split('.')[0]}"
                         end
-        modify_zip_path(zip_file_path)
+        @artifact_manifest = artifact_manifest_for_version(zip_file_path, version)
+        validate_artifact_manifest!(@artifact_manifest)
+        modify_zip_path(zip_file_path, @artifact_manifest)
       end
 
       def create_work_dir
@@ -436,7 +441,8 @@ module Pod
       end
 
       # 修改zip下载path
-      def modify_zip_path(zip_path)
+      def modify_zip_path(zip_path, artifact_manifest = @artifact_manifest)
+        validate_artifact_manifest!(artifact_manifest)
         content = File.open(@push_podspec_file).read
         content_lines = content.lines
         host = (ENV['GIT_LAB_HOST']).to_s.freeze
@@ -472,6 +478,10 @@ module Pod
         new_framework_spec_content.gsub!('ss.', 's.')
         new_framework_spec_content.gsub!(/s.subspec .*/, '')
         new_framework_spec_content.gsub!(/\s{2}end/, '')
+        new_framework_spec_content = rewrite_primary_framework_reference(
+          new_framework_spec_content,
+          artifact_manifest.fetch('artifact').fetch('path')
+        )
 
         content.gsub!(/.*?(?=Pod::Spec\.new do \|s\|)/m, '')
         content.gsub!(/if use_framework.*?end/m, http_source.rstrip)
@@ -484,6 +494,130 @@ module Pod
         content.gsub!('s.vendored_frameworks', '  s.vendored_frameworks')
         content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://#{host}/ios_framework/\#{s.name.to_s}.git\"")
         File.open(@push_podspec_file, 'w') { |file| file.puts content.strip }
+      end
+
+      def artifact_manifest_for_version(zip_path, version)
+        directory = zip_path.sub(%r{\Arepository/files/}, '')
+        filename = "#{@new_spec_name}-#{version}.artifact.json"
+        repository_path = URI.encode_www_form_component(File.join(directory, filename))
+        response = send_request(
+          GET,
+          "/projects/#{get_project_id}/repository/files/#{repository_path}",
+          { 'ref' => 'main' }
+        )
+        encoded_content = response['content'].to_s
+        raise Informative, "远端产物缺少 #{filename}" if encoded_content.empty?
+
+        JSON.parse(Base64.decode64(encoded_content))
+      rescue JSON::ParserError, ArgumentError => e
+        raise Informative, "#{filename} 内容无效：#{e.message}"
+      end
+
+      def validate_artifact_manifest!(manifest)
+        raise Informative, '缺少 artifact manifest，拒绝发布二进制版本' unless manifest.is_a?(Hash)
+        raise Informative, 'artifact manifest schema_version 不受支持' unless manifest['schema_version'] == 1
+
+        component = manifest['component'] || {}
+        unless component['name'] == @new_spec_name && component['version'].to_s == @new_version.to_s
+          raise Informative,
+                "artifact manifest 与待发布版本不匹配：期望 #{@new_spec_name} #{@new_version}，" \
+                "实际 #{component['name']} #{component['version']}"
+        end
+
+        artifact = manifest['artifact'] || {}
+        expected_artifact = "#{@new_spec_name}.xcframework"
+        unless artifact['type'] == 'xcframework' && artifact['path'] == expected_artifact
+          raise Informative, "主产物必须是 #{expected_artifact}"
+        end
+        unless %w[static dynamic].include?(artifact['linkage'])
+          raise Informative, 'artifact manifest 缺少有效 linkage'
+        end
+
+        ios = manifest.dig('platforms', 'ios') || {}
+        device = ios['device'] || {}
+        unless device['status'] == 'supported' && device['architectures'].is_a?(Array) && !device['architectures'].empty?
+          raise Informative, 'XCFramework 缺少有效的 iOS 真机切片'
+        end
+
+        simulator = ios['simulator'] || {}
+        simulator_archs = simulator['architectures']
+        simulator_valid =
+          if simulator['status'] == 'supported'
+            simulator_archs.is_a?(Array) && !simulator_archs.empty?
+          elsif simulator['status'] == 'unavailable'
+            simulator_archs == []
+          else
+            false
+          end
+        raise Informative, 'artifact manifest 的模拟器能力声明无效' unless simulator_valid
+
+        unless manifest.dig('integrity', 'validated') == true
+          raise Informative, '构建端未完成 XCFramework 完整性校验'
+        end
+
+        debug_symbols = manifest['debug_symbols']
+        raise Informative, 'artifact manifest 缺少 debug_symbols 声明' unless debug_symbols.is_a?(Array)
+        debug_symbols.each do |symbols|
+          path = symbols['path'].to_s
+          if path.empty? || Pathname(path).absolute? || path.split(File::SEPARATOR).include?('..') ||
+             !path.start_with?("#{expected_artifact}/")
+            raise Informative, "dSYM 路径无效：#{path}"
+          end
+          raise Informative, "dSYM UUID 声明无效：#{path}" unless symbols['uuids'].is_a?(Array)
+        end
+
+        if artifact['linkage'] == 'dynamic'
+          required_variants = simulator['status'] == 'supported' ? %w[device simulator] : ['device']
+          symbol_variants = debug_symbols.filter_map do |symbols|
+            symbols['variant'] unless symbols['uuids'].empty?
+          end
+          missing = required_variants - symbol_variants
+          raise Informative, "动态 XCFramework 缺少 #{missing.join(', ')} dSYM/UUID" unless missing.empty?
+        end
+
+        if simulator['status'] == 'unavailable'
+          UI.puts "-> #{@new_spec_name} #{@new_version} 仅支持真机，继续发布 device-only XCFramework"
+        end
+        manifest
+      end
+
+      def rewrite_primary_framework_reference(content, artifact_path)
+        framework_names = [@new_spec_name]
+        framework_names << @spec.name if defined?(@spec) && @spec
+        rewritten = content.dup
+        replaced = false
+
+        framework_names.compact.uniq.each do |name|
+          pattern = /(?<![A-Za-z0-9_])#{Regexp.escape(name)}\.framework(?![A-Za-z0-9_])/
+          rewritten.gsub!(pattern) do
+            replaced = true
+            artifact_path
+          end
+        end
+        rewritten.gsub!(/#\{s\.name(?:\.to_s)?\}\.framework/) do
+          replaced = true
+          artifact_path
+        end
+
+        unless replaced || rewritten.include?(artifact_path)
+          raise Informative, "CoreFramework 未精确引用 #{@new_spec_name}.framework，无法安全改写主产物"
+        end
+        rewritten
+      end
+
+      def artifact_capability_record(manifest)
+        simulator = manifest.dig('platforms', 'ios', 'simulator')
+        {
+          'name' => manifest.dig('component', 'name'),
+          'version' => manifest.dig('component', 'version'),
+          'device' => manifest.dig('platforms', 'ios', 'device', 'architectures'),
+          'simulator' => simulator['architectures'],
+          'status' => simulator['status'] == 'supported' ? 'supported' : 'device_only',
+        }
+      end
+
+      def emit_artifact_capability(manifest)
+        puts "-> [WK_ARTIFACT] #{JSON.generate(artifact_capability_record(manifest))}"
       end
 
       # 适配新的文件保存路径
@@ -634,6 +768,7 @@ module Pod
         config.silent = !@debug
         argv = CLAide::ARGV.coerce([@source, @push_podspec_file, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
+          emit_artifact_capability(@artifact_manifest)
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
           config.silent = false
