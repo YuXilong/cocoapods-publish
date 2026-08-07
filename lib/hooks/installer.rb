@@ -11,7 +11,7 @@ module Pod
 
     PRECHECK_HINT = '提示：可执行 `pod install --precheck` 一次性检查 Podfile 中所有找不到的依赖版本。'.freeze
 
-    # swift 版本按天缓存到 /tmp，与 dependency.rb 共用同一缓存文件，避免二次起进程
+    # 仅用于识别历史编译器绑定版本；新版本不再与本机 Swift 版本耦合。
     def self.cached_swift_version
       cache_file = "/tmp/.cocoapods_swift_ver_#{Time.now.strftime('%Y-%m-%d')}"
       return File.read(cache_file).strip if File.exist?(cache_file)
@@ -41,14 +41,11 @@ module Pod
       return unless File.exist?(lock_file)
 
       content = File.read(lock_file)
-      swift_version = SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i
-      return if swift_version >= 59 && content.include?(".swift#{SWIFT_VERSION}")
+      legacy_versions = content.scan(/\.swift-(\d+(?:\.\d+)*)/).flatten.uniq
+      return if legacy_versions.empty? || legacy_versions.all? { |version| version == SWIFT_VERSION }
 
-      # 移除lockfile
-      @lockfile = nil if swift_version >= 59
-
-      # 移除lockfile
-      @lockfile = nil if swift_version < 59 && content.include?('.swift')
+      # 历史二进制仍需匹配编译器；纯数字的 module-stable 版本不会触发重解析。
+      @lockfile = nil
     end
 
     def resolve_dependencies

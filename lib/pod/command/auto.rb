@@ -23,7 +23,6 @@ module Pod
             %w[--from-wukong 发起者为`wukong`],
             %w[--debug 输出详细构建日志],
             %w[--beta 发布beta版本],
-            %w[--upgrade-swift 升级Swift版本],
             %w[--continue-from-upload 从上传任务恢复发布],
             %w[--skip-framework-publish 仅发布源码，跳过二进制产物发布],
             %w[--subspecs 同时构建的subspec]
@@ -61,9 +60,6 @@ module Pod
 
           # 发布到GitHub
           @publish_to_github_auto = argv.flag?('publish-to-github', false)
-
-          # 升级Swift版本
-          @upgrade_swift_auto = argv.flag?('upgrade-swift', false)
 
           # 从上传任务恢复
           @continue_from_upload_auto = argv.flag?('continue-from-upload', false)
@@ -110,7 +106,6 @@ module Pod
             args.push("--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}") if @auto_mixup && !@auto_mixup_property_class_prefixes.empty?
             args.push('--from-wukong') if @from_wukong
             args.push('--beta') if @beta_version_auto
-            args.push('--upgrade-swift') if @upgrade_swift_auto
             args.push('--only-mixup') if @only_mixup_auto
             args.push("--new-class-prefixes=#{@auto_new_class_prefixes}") if @auto_mixup
             args.push("--old-class-prefix=#{@auto_old_class_prefix}") if @auto_mixup
@@ -134,7 +129,6 @@ module Pod
               args.push("--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}") if @auto_mixup && !@auto_mixup_property_class_prefixes.empty?
               args.push('--from-wukong') if @from_wukong
               args.push('--beta') if @beta_version_auto
-              args.push('--upgrade-swift') if @upgrade_swift_auto
               args.push('--only-mixup') if @only_mixup_auto
               args.push("--new-class-prefixes=#{@auto_new_class_prefixes}") if @auto_mixup
               args.push("--old-class-prefix=#{@auto_old_class_prefix}") if @auto_mixup
@@ -150,7 +144,7 @@ module Pod
 
           # BTAssets不发布源码版本
           should_increase_version = true
-          if !@beta_version_auto && !@upgrade_swift_auto && !@is_assets_framework
+          if !@beta_version_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             if @from_wukong
@@ -176,8 +170,6 @@ module Pod
             should_increase_version = false
           end
 
-          should_increase_version = false if @upgrade_swift_auto
-
           if @skip_framework_publish_auto
             puts '-> 发布完成'.green unless @from_wukong
             return
@@ -195,7 +187,6 @@ module Pod
           params << '--debug' if @debug
           params << '--beta' if @beta_version_auto
           params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
-          params << '--upgrade-swift' if @upgrade_swift_auto
           params << '--mixup-publish' if @auto_mixup
           params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
           params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"

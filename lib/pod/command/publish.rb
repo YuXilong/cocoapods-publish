@@ -17,7 +17,6 @@ module Pod
 
       def self.options
         [
-          %w[--swift-version 指定Swift版本.],
           %w[--skip-import-validation 跳过import_validation验证.],
           %w[--skip-lib-lint 跳过lib验证.],
           %w[--sources 指定依赖的组件仓库.],
@@ -25,7 +24,6 @@ module Pod
           %w[--from-wukong 发起者为`wukong`],
           %w[--debug 输出详细构建日志],
           %w[--beta 发布beta版本],
-          %w[--upgrade-swift 升级Swift版本],
           %w[--subspecs 同时构建的subspec],
           %w[--mixup-publish 混淆],
           %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
@@ -35,7 +33,6 @@ module Pod
       def initialize(argv)
         @source = argv.shift_argument
         @name = argv.shift_argument
-        @swift_version = argv.option('swift-version', nil)
         @skip_import_validation = argv.flag?('skip-import-validation', false)
         @skip_lib_lint = argv.flag?('skip-lib-lint', false)
         @sources = argv.option('sources', 'trunk,BaiTuPods,BaiTuFrameworkPods').split(',')
@@ -54,9 +51,6 @@ module Pod
 
         # 发布beta版本
         @beta_version_publish = argv.flag?('beta', false)
-
-        # 升级Swift版本
-        @upgrade_swift_publish = argv.flag?('upgrade-swift', false)
 
         @swift_version = local_swift_version
 
@@ -304,16 +298,6 @@ module Pod
         stdout.gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
       end
 
-      FW_EXCLUDE_NAMES = %w[BTDContext].freeze
-      def swift_version_support?
-        name = @spec.attributes_hash['name']
-        # 过滤白名单
-        return false unless FW_EXCLUDE_NAMES.filter { |nm| name.include?(nm) }.empty?
-
-        content = File.open(@name).read.to_s
-        @swift_version.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59 && !content.gsub(/source_files.*=.*.swift/).to_a.empty?
-      end
-
       def parse_version
         version = @spec.attributes_hash['version']
         @old_version = version
@@ -327,19 +311,21 @@ module Pod
       end
 
       def append_version_meta(version, append_meta)
-        return version.gsub('.swift', ".#{append_meta}.swift") if version.include?('.swift')
-
-        "#{version}.#{append_meta}"
+        "#{version_without_swift_suffix(version)}.#{append_meta}"
       end
 
       def version_for_subspec(subspec)
-        version = @main_version
-        version = @main_version.gsub('.swift-', ".#{subspec}.swift-") if version.include?('.swift-')
+        version = version_without_swift_suffix(@main_version)
         if version.include?(".#{@current_branch}")
-          version = @main_version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}")
+          version = version.gsub(".#{@current_branch}", ".#{subspec}.#{@current_branch}")
         end
-        version = "#{version}.#{subspec}" if !version.include?(".#{@current_branch}") && !version.include?('.swift-')
+        version = "#{version}.#{subspec}" unless version.include?(".#{@current_branch}")
         version
+      end
+
+      # 迁移期间允许从历史 podspec 继续发布，但所有新版本统一使用业务版本号。
+      def version_without_swift_suffix(version)
+        version.sub(/\.swift-\d+(?:\.\d+)*\z/, '')
       end
 
       # 增加版本号
@@ -351,36 +337,14 @@ module Pod
         if @is_version_need_attach_branch
           # 附带分支名称的不发beta
           new_version = "#{@version_number}.#{@current_branch}"
-          # 处理Swift版本
-          return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
-
-          return new_version
-        end
-
-        if @upgrade_swift_publish && swift_version_support?
-          # swift 版本升级
-          version = @spec.attributes_hash['version']
-          new_version = version.split('.swift')[0] if version.include?('.swift')
-          if @beta_version_number != 0 && !new_version.include?('.b')
-            new_version = "#{new_version}.b#{@beta_version_number}"
-          end
-          # 处理Swift版本
-          return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
-
           return new_version
         end
 
         if @beta_version_publish
           # beta版本
           new_version = "#{@version_number}.b#{@beta_version_number}"
-          # 处理Swift版本
-          return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
-
           return new_version
         end
-
-        # 处理Swift版本
-        return "#{new_version}.swift-#{@swift_version}" if swift_version_support?
 
         new_version
       end

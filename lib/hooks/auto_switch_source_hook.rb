@@ -16,9 +16,6 @@ Pod::HooksManager.register('cocoapods-publish', :pre_install) do |context, _|
     next
   end
 
-  # 检测本地Swift版本
-  # check_swift_version
-
   # 自动指定单个库开启源码模式
   context.podfile.check_envs
 
@@ -85,32 +82,6 @@ def fast_copy_tree(src, dst)
   # 清理 clonefile 半途失败的残留，避免回退复制因 dst 已存在而变成嵌套拷贝
   FileUtils.rm_rf(dst) unless dst_existed
   system('cp', '-R', src, dst)
-end
-
-# SWIFT_VERSION = Open3.popen3('swift --version')[1].gets.to_s.gsub(/version (\d+(\.\d+)+)/).to_a[0].split(' ')[1]
-
-# 检测本地Swift版本
-def check_swift_version
-  lock_file = Pod::Config.instance.lockfile_path.to_s
-  return unless File.exist?(lock_file)
-
-  content = File.read(lock_file)
-  swift_version = SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i
-  return if swift_version >= 59 && content.include?(".swift#{SWIFT_VERSION}")
-
-  # 移除lockfile
-  reset_lockfile if swift_version >= 59
-
-  # 移除lockfile
-  reset_lockfile if swift_version < 59 && content.include?('.swift')
-end
-
-def reset_lockfile
-  lock_file = Pod::Config.instance.lockfile_path.to_s
-  FileUtils.remove_file(lock_file) if File.exist?(lock_file)
-
-  Pod::Config.instance.instance_variable_set(:@lockfile_path, nil)
-  Pod::Config.instance.instance_variable_set(:@lockfile, nil)
 end
 
 # 单次 glob + JSON 解析，供 using_framework_specs 和 fix_cache 共享

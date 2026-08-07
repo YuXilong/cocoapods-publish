@@ -12,6 +12,8 @@ module Pod
     end
 
     SWIFT_VERSION = cached_swift_version
+    LEGACY_SWIFT_VERSION_PATTERN = /\.swift-(?<compiler>\d+(?:\.\d+)*)\z/.freeze
+    VERSION_REQUIREMENT_OPERATOR_PATTERN = /[<>=~]/.freeze
 
     alias origin_initialize initialize
 
@@ -25,24 +27,17 @@ module Pod
         Dependency.source_dependency[name] = requirements.last[:path]
       end
 
+      base_name = name.split('/').first
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
-         swift_framework?(name) &&
-         swift_version_support?
+         legacy_swift_framework?(base_name)
         if name.include?('/')
-          unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{name.split('/')[0]}/#{prefix}" }.empty?
-            requirements = [genrate_requirements(name.split('/')[0], requirements)]
+          unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{base_name}/#{prefix}" }.empty?
+            requirements = [genrate_requirements(base_name, requirements)]
           end
         else
           requirements = [genrate_requirements(name, requirements)]
         end
-      end
-
-      if name.start_with?('BT') &&
-         !requirements.last.is_a?(Hash) &&
-         swift_framework?(@name) &&
-         !swift_version_support?
-        requirements = [rebind_version(requirements)]
       end
 
       origin_initialize(name, *requirements)
@@ -69,9 +64,7 @@ module Pod
 
       return version if version.is_a?(Array)
 
-      # 判断是否已指定Swift版本号
-      version = version.to_s
-      version = "#{version}.swift-#{SWIFT_VERSION}" unless version.include?('.swift')
+      version = compatible_framework_version(name, version.to_s)
 
       # 存储自动指定的版本号
       Dependency.modified_frameworks[name] = version unless Dependency.modified_frameworks.keys.include?(name)
@@ -82,14 +75,6 @@ module Pod
       end
 
       # 重新指定版本
-      version
-    end
-
-    def rebind_version(requirements)
-      return requirements if requirements.empty?
-
-      version = requirements[0].to_s
-      version = version.split('.swift')[0] if version.include?('.swift')
       version
     end
 
@@ -105,75 +90,38 @@ module Pod
       @@source_dependenc ||= {}
     end
 
-    # swift_framework? 按组件名 memoize，单进程内只判断一次
-    def self.swift_framework_cache
-      @@swift_framework_cache ||= {}
-    end
-
-    # Podfile / Podfile.local 内容只读一次，避免每次 Dependency.new 都触发 File.read
-    def self.podfile_content
-      return @@podfile_content if defined?(@@podfile_content)
-
-      podfile_path = Pod::Config.instance.podfile.defined_in_file.to_s
-      podfile_local_path = "#{podfile_path}.local"
-      @@podfile_content = if File.exist?(podfile_local_path)
-                            File.read(podfile_local_path)
-                          elsif File.exist?(podfile_path)
-                            File.read(podfile_path)
-                          end
-    end
-
     # local_framework_version 按组件名 memoize
     def self.local_version_cache
       @@local_version_cache ||= {}
     end
 
-    FW_EXCLUDE_NAMES = %w[BTDContext].freeze
-    def swift_framework?(fw)
-      return false if fw.nil?
-      # 过滤白名单
-      return false unless FW_EXCLUDE_NAMES.filter { |name| fw.include?(name) }.empty?
+    def self.legacy_swift_framework_cache
+      @legacy_swift_framework_cache ||= {}
+    end
 
-      cache = Dependency.swift_framework_cache
-      return cache[fw] if cache.key?(fw)
+    # 新版本由 CocoaPods 正常解析；只有存在历史 Swift 后缀时才启用兼容转换。
+    def legacy_swift_framework?(framework_name)
+      return false if framework_name.nil? || SWIFT_VERSION.empty?
 
-      content = Dependency.podfile_content
-      if content
-        # 非破坏性替换，避免污染缓存内容
-        check = content.gsub(/#.*pod*.'#{fw}',*.:path =>*.*:dev =>*.1/, '')
-        return cache[fw] = false unless check.gsub(/pod*.'#{fw}',*.:path =>*.*:dev =>*.1/).to_a.empty?
-      else
-        deps = Pod::Config.instance.podfile.to_hash['target_definitions'][0]['children'][0]['dependencies']
-        if deps.keys.include?(fw) && !deps[fw].empty?
-          h = deps[fw][0]
-          return cache[fw] = false if h.is_a?(Hash) && !h[:path].nil? && h[:dev] == 1
-        end
+      cache = Dependency.legacy_swift_framework_cache
+      return cache[framework_name] if cache.key?(framework_name)
+
+      cache[framework_name] = framework_spec_paths(framework_name).any? do |spec_file|
+        version = Pathname(spec_file).parent.basename.to_s
+        match = LEGACY_SWIFT_VERSION_PATTERN.match(version)
+        match && match[:compiler] == SWIFT_VERSION
       end
-
-      base_fw = fw.include?('/') ? fw.split('/')[0] : fw
-      repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
-      # 单层 glob（已知结构为 base_fw/VERSION/base_fw.podspec），去掉 ** 消除递归开销
-      folder_paths = Dir.glob("#{repo}/#{base_fw}/*/#{base_fw}.podspec").select { |entry| File.file?(entry) }
-
-      spec_file = folder_paths.max_by { |folder| Pathname(folder).parent.basename }
-      return cache[fw] = false if spec_file.nil?
-
-      spec_content = File.open(spec_file).read.to_s
-      cache[fw] = !spec_content.gsub(/source_files.*=.*.swift/).to_a.empty? ||
-                  !spec_content.gsub(%r{.swift-.*\.zip/raw\?ref=main}).to_a.empty?
     end
 
     def local_framework_version(fw)
       # 获取通过MIN_SWIFT_DEPENDENCY_VERSION指定的版本号
       version = get_min_dependency_version(fw)
-      return version unless version.nil?
+      return compatible_framework_version(fw, version) unless version.nil?
 
       cache = Dependency.local_version_cache
       return cache[fw] if cache.key?(fw)
 
-      repo = "#{Pod::Config.instance.repos_dir}/BaiTuFrameworkPods"
-      # 获取文件夹列表
-      folder_paths = Dir.glob("#{repo}/#{fw}/*#{SWIFT_VERSION}*/#{fw}.podspec").select { |entry| File.file?(entry) && entry != "#{repo}/#{fw}/#{fw}.podspec" }
+      folder_paths = compatible_framework_spec_paths(fw)
 
       # 使用File.mtime获取每个文件夹的修改日期并进行排序
       if folder_paths.empty?
@@ -187,17 +135,67 @@ module Pod
     end
 
     def local_framework_version_sort_key(spec_file)
-      version = Pathname(spec_file).parent.basename.to_s.split('.swift').first
-      base_version, beta_version = version.split('.b', 2)
+      version = Pathname(spec_file).parent.basename.to_s
+      stable_priority = LEGACY_SWIFT_VERSION_PATTERN.match?(version) ? 0 : 1
+      semantic_version = version.sub(LEGACY_SWIFT_VERSION_PATTERN, '')
+      base_version, beta_version = semantic_version.split('.b', 2)
       numeric_segments = base_version.scan(/\d+/).map(&:to_i)
       beta_priority = beta_version.nil? ? 0 : 1
       beta_number = beta_version.to_s[/\A\d+/].to_i
 
-      [numeric_segments, beta_priority, beta_number, version]
+      [numeric_segments, beta_priority, beta_number, stable_priority, semantic_version]
     end
 
-    def swift_version_support?
-      SWIFT_VERSION.gsub(/\d+\.\d+/).to_a[0].gsub('.', '').to_i >= 59
+    def compatible_framework_version(framework_name, version)
+      if version.match?(VERSION_REQUIREMENT_OPERATOR_PATTERN)
+        return compatible_version_for_requirement(framework_name, version)
+      end
+
+      legacy_match = LEGACY_SWIFT_VERSION_PATTERN.match(version)
+      base_version = legacy_match ? version.sub(LEGACY_SWIFT_VERSION_PATTERN, '') : version
+      return base_version if framework_version_exists?(framework_name, base_version)
+
+      legacy_version = "#{base_version}.swift-#{SWIFT_VERSION}"
+      if !SWIFT_VERSION.empty? && framework_version_exists?(framework_name, legacy_version)
+        return legacy_version
+      end
+
+      # 不继续选择其它编译器生成的二进制，让 CocoaPods 明确报告版本不可用。
+      legacy_match ? base_version : version
+    end
+
+    def compatible_version_for_requirement(framework_name, version_requirement)
+      requirement = Requirement.new(version_requirement)
+      spec_file = compatible_framework_spec_paths(framework_name).select do |candidate|
+        artifact_version = Pathname(candidate).parent.basename.to_s
+        semantic_version = artifact_version.sub(LEGACY_SWIFT_VERSION_PATTERN, '')
+        requirement.satisfied_by?(Version.new(semantic_version))
+      end.max_by { |candidate| local_framework_version_sort_key(candidate) }
+      return version_requirement if spec_file.nil?
+
+      Specification.from_file(spec_file).attributes_hash['version']
+    rescue ArgumentError
+      version_requirement
+    end
+
+    def compatible_framework_spec_paths(framework_name)
+      framework_spec_paths(framework_name).select do |spec_file|
+        version = Pathname(spec_file).parent.basename.to_s
+        match = LEGACY_SWIFT_VERSION_PATTERN.match(version)
+        match.nil? || match[:compiler] == SWIFT_VERSION
+      end
+    end
+
+    def framework_spec_paths(framework_name)
+      base_fw = framework_name.split('/').first
+      repo = File.join(Pod::Config.instance.repos_dir.to_s, 'BaiTuFrameworkPods')
+      Dir.glob(File.join(repo, base_fw, '*', "#{base_fw}.podspec")).select { |entry| File.file?(entry) }
+    end
+
+    def framework_version_exists?(framework_name, version)
+      base_fw = framework_name.split('/').first
+      repo = File.join(Pod::Config.instance.repos_dir.to_s, 'BaiTuFrameworkPods')
+      File.file?(File.join(repo, base_fw, version, "#{base_fw}.podspec"))
     end
 
     # 获取指定的版本号

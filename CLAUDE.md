@@ -9,7 +9,7 @@ cocoapods-publish 是一个 CocoaPods 插件，用于自动发布组件到私有
 - 自动发布源码/二进制组件到私有仓库
 - 源码与二进制模式自动切换
 - 支持代码混淆发布
-- 支持 Swift 版本管理
+- 支持 Swift Module Stability 产物及历史编译器后缀兼容
 - 支持 beta 版本发布
 - 自动创建 GitLab 仓库
 - Podfile.local 本地覆盖支持
@@ -58,8 +58,8 @@ pod publish auto [NAME.podspec] [options]
 
 ### Hook 模块 (lib/hooks/)
 - `auto_switch_source_hook.rb` - 源码/二进制缓存自动切换（pre_install、source_provider hook）
-- `installer.rb` - 安装器扩展（Podfile.local 支持、混淆源地址动态修改、Swift 版本检测、Texture<3.2.0 主线程自锁修复）
-- `dependency.rb` - 依赖处理扩展（Swift 版本自动绑定、混淆库支持）
+- `installer.rb` - 安装器扩展（Podfile.local 支持、混淆源地址动态修改、历史 Swift 版本检测、Texture<3.2.0 主线程自锁修复）
+- `dependency.rb` - 依赖处理扩展（Module Stability 版本优先、历史 Swift 版本兼容、混淆库支持）
 - `version.rb` - 版本号处理扩展（.swift 后缀兼容）
 - `podfile.rb` - Podfile 后处理（部署目标、签名配置）
 - `project.rb` - 项目扩展（Podfile.local 添加到项目）
@@ -89,9 +89,10 @@ baitu_mixup_module!('MODULE_NAME')
 
 - 基础版本：`1.0.0`
 - Beta 版本：`1.0.0.b1`
-- Swift 版本：`1.0.0.swift-5.9`
 - 分支版本：`1.0.0.BRANCH_NAME`
 - 混淆版本：`1.0.0.MNL-C`（类混淆）、`1.0.0.MNL-CF`（类+函数混淆）、`1.0.0.MNL-SC`（subspec+类）
+
+新发布的 Swift XCFramework 使用与编译器无关的业务版本号，不再生成 `.swift-<version>` 后缀。安装器仍可读取历史后缀版本，并且只会回退到与当前 Swift 编译器一致的历史产物。
 
 ## 开发注意事项
 

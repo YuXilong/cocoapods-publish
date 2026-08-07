@@ -71,6 +71,39 @@ module Pod
       content.should.include '#import <arpa/inet.h>'
     end
 
+    def write_lockfile(content)
+      lockfile = File.join(@tmp_dir, 'Podfile.lock')
+      File.write(lockfile, content)
+      Pod::Config.instance.stubs(:lockfile_path).returns(Pathname(lockfile))
+    end
+
+    it 'keeps a lockfile containing only module-stable versions' do
+      write_lockfile("PODS:\n  - BTLogger (131)\n")
+      @installer.instance_variable_set(:@lockfile, :existing)
+
+      @installer.send(:check_swift_version)
+
+      @installer.instance_variable_get(:@lockfile).should == :existing
+    end
+
+    it 'keeps a lockfile containing a legacy version for the current Swift compiler' do
+      write_lockfile("PODS:\n  - BTLogger (130.swift-#{Installer::SWIFT_VERSION})\n")
+      @installer.instance_variable_set(:@lockfile, :existing)
+
+      @installer.send(:check_swift_version)
+
+      @installer.instance_variable_get(:@lockfile).should == :existing
+    end
+
+    it 'invalidates a lockfile containing a legacy version for another Swift compiler' do
+      write_lockfile("PODS:\n  - BTLogger (130.swift-0.0.0)\n")
+      @installer.instance_variable_set(:@lockfile, :existing)
+
+      @installer.send(:check_swift_version)
+
+      @installer.instance_variable_get(:@lockfile).should.be.nil
+    end
+
     it 'patches YYKit chained comparisons for Xcode 26' do
       file = yytext_layout_path('YYKit')
       write_chained_comparisons(file)

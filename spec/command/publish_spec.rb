@@ -154,5 +154,38 @@ module Pod
         loaded.should == manifest
       end
     end
+
+    describe 'module-stable artifact versions' do
+      before do
+        @command = Command::Publish.allocate
+        attributes = {
+          'name' => 'MyKit',
+          'version' => '130.swift-6.3.3',
+        }
+        @command.instance_variable_set(
+          :@spec,
+          Struct.new(:attributes_hash).new(attributes)
+        )
+        @command.instance_variable_set(:@increase_version, true)
+        @command.instance_variable_set(:@is_version_need_attach_branch, false)
+        @command.instance_variable_set(:@beta_version_publish, false)
+        @command.instance_variable_set(:@swift_version, '6.4')
+      end
+
+      it 'publishes the next version without a Swift compiler suffix' do
+        @command.send(:generate_new_version).should == '131'
+      end
+
+      it 'removes a legacy Swift suffix before appending artifact metadata' do
+        @command.send(:append_version_meta, '131.swift-6.3.3', 'VO-C').should == '131.VO-C'
+      end
+
+      it 'removes a legacy Swift suffix before appending subspec metadata' do
+        @command.instance_variable_set(:@main_version, '131.swift-6.3.3')
+        @command.instance_variable_set(:@current_branch, 'MAIN')
+
+        @command.send(:version_for_subspec, 'Core').should == '131.Core'
+      end
+    end
   end
 end
