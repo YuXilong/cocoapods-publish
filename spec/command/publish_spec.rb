@@ -30,19 +30,66 @@ module Pod
       it 'bypasses local hooks for generated version commits' do
         command = Command::Publish.allocate
 
-        command.send(:git_commit_command, '100.swift-6.2').
-          should == 'git commit --no-verify -m "[Update] (100.swift-6.2)"'
+        command.send(:git_commit_arguments, '100.swift-6.2').should == [
+          'commit', '--no-verify', '-m', '[Update] (100.swift-6.2)'
+        ]
       end
 
       it 'recreates existing local and remote tags before publishing a tag' do
         command = Command::Publish.allocate
 
-        command.send(:git_recreate_tag_commands, '100.swift-6.2').should == [
-          '(git tag -d 100.swift-6.2 >/dev/null 2>&1 || true)',
-          'git tag -a 100.swift-6.2 -m "[Update] (100.swift-6.2)"',
+        command.send(:git_tag_arguments, '100.swift-6.2').should == [
+          'tag', '-a', '100.swift-6.2', '-m', '[Update] (100.swift-6.2)'
         ]
-        command.send(:git_delete_remote_tag_command, '100.swift-6.2').
-          should == '(git push --no-verify origin :refs/tags/100.swift-6.2 --quiet >/dev/null 2>&1 || true)'
+        command.send(:git_delete_remote_tag_arguments, '100.swift-6.2').should == [
+          'push', '--no-verify', 'origin', ':refs/tags/100.swift-6.2', '--quiet'
+        ]
+      end
+
+      it 'rebases remote component changes before committing and pushing' do
+        command = Command::Publish.allocate
+        sequence = sequence('component publish')
+
+        command.expects(:run_project_git!).with('fetch', 'origin', 'main').in_sequence(sequence)
+        command.expects(:run_project_git!).with(
+          'rebase', '--autostash', 'origin/main'
+        ).in_sequence(sequence)
+        command.expects(:run_project_git!).with('add', '.').in_sequence(sequence)
+        command.expects(:run_project_git!).with(
+          'commit', '--no-verify', '-m', '[Update] (101)'
+        ).in_sequence(sequence)
+        command.expects(:run_project_git!).with(
+          'push', '--no-verify', 'origin', 'main', '--quiet'
+        ).in_sequence(sequence)
+
+        command.send(:commit_and_push_component_repository!, '101', 'main')
+      end
+
+      it 'fetches, rebases, and retries when a component push loses a race' do
+        command = Command::Publish.allocate
+        calls = []
+        push_attempts = 0
+        conflict = Informative.new(
+          "! [rejected] main -> main (fetch first)\n" \
+          'Updates were rejected because the remote contains work.'
+        )
+        command.define_singleton_method(:run_project_git!) do |*arguments|
+          calls << arguments
+          if arguments.first == 'push'
+            push_attempts += 1
+            raise conflict if push_attempts == 1
+          end
+          ''
+        end
+
+        command.send(:push_component_branch_with_retry!, 'main')
+
+        calls.should == [
+          ['push', '--no-verify', 'origin', 'main', '--quiet'],
+          ['fetch', 'origin', 'main'],
+          ['rebase', '--autostash', 'origin/main'],
+          ['push', '--no-verify', 'origin', 'main', '--quiet'],
+        ]
       end
     end
 

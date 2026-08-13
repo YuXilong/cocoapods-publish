@@ -2,13 +2,17 @@
 
 require 'English'
 require 'base64'
+require 'cocoapods-publish/git_push_retry'
 require 'json'
+require 'open3'
 require 'pod/command/auto'
 require 'uri'
 
 module Pod
   class Command
     class Publish < Command
+      include GitPushRetry
+
       self.summary = '自动发布组件到私有组件仓库.'
 
       self.arguments = [
@@ -171,20 +175,19 @@ module Pod
       def push_code
         # 本地仓库无修改
         return unless git_dirty?
+
         version = code_version
         branch = get_current_branch
 
-        command = "git add . && #{git_commit_command(version)}"
-        command += " && #{git_push_branch_command(branch)}"
-
         config.silent = !@debug
-        output = `#{command}`.lines
-        config.silent = false
-
-        if $?.exitstatus != 0
-          puts "-> 代码提交失败！Command： #{command}".red
-          `git reset --hard HEAD~1`
+        begin
+          commit_and_push_component_repository!(version, branch)
+        rescue ::StandardError => e
+          config.silent = false
+          puts "-> 代码提交失败：#{e.message}".red
+          Process.exit(1)
         end
+        config.silent = false
       end
 
       def git_dirty?
@@ -682,28 +685,18 @@ module Pod
         UI.puts '-> 创建新版本...'.yellow unless @from_wukong
         branch = get_current_branch
 
-        command = "cd #{@project_path}"
-        command += ' && git add .'
-        command += " && #{git_commit_command(@new_version)}"
-        # command += ' && git fetch'
-        # command += " && git pull origin #{branch}"
-        git_recreate_tag_commands(@new_version).each do |cmd|
-          command += " && #{cmd}"
-        end
-        command += " && #{git_push_branch_command(branch)}"
-        command += " && #{git_delete_remote_tag_command(@new_version)}"
-        command += " && #{git_push_tag_command(@new_version)}"
-
         config.silent = !@debug
-        output = `#{command}`.lines
-        UI.puts
-        config.silent = false
-        if $?.exitstatus != 0
-          UI.puts "-> #{output}".red
-          UI.puts "-> 创建新版本失败！Command： #{command}".red
+        begin
+          commit_and_push_component_repository!(@new_version, branch)
+          recreate_and_push_component_tag!(@new_version)
+        rescue ::StandardError => e
+          config.silent = false
+          UI.puts "-> 创建新版本失败：#{e.message}".red
           restore_old_version_to_podspec
           Process.exit(1)
         end
+        UI.puts
+        config.silent = false
 
         UI.puts "-> 新版本(#{@new_version})创建成功！".green unless @from_wukong
       end
@@ -712,50 +705,114 @@ module Pod
         UI.puts '-> 推送代码...'.yellow unless @from_wukong
         branch = get_current_branch
 
-        command = "cd #{@project_path}"
-        command += ' && git add .'
-        command += " && #{git_commit_command(@new_version)}"
-        command += " && #{git_push_branch_command(branch)}"
-
         config.silent = !@debug
-        output = `#{command}`.lines
-        UI.puts
-        config.silent = false
-        if $?.exitstatus != 0
-          UI.puts "-> #{output}".red
-          UI.puts "-> 代码推送失败！Command： #{command}".red
+        begin
+          commit_and_push_component_repository!(@new_version, branch)
+        rescue ::StandardError => e
+          config.silent = false
+          UI.puts "-> 代码推送失败：#{e.message}".red
           restore_old_version_to_podspec
           Process.exit(1)
         end
+        UI.puts
+        config.silent = false
 
         UI.puts '-> 推送代码成功！'.green unless @from_wukong
       end
 
       def get_current_branch
-        `git symbolic-ref --short HEAD`.to_s.chomp
+        run_project_git!('symbolic-ref', '--short', 'HEAD').strip
       end
 
-      def git_commit_command(version)
-        "git commit --no-verify -m \"[Update] (#{version})\""
+      def commit_and_push_component_repository!(version, branch)
+        sync_component_repository!(branch)
+        run_project_git!('add', '.')
+        run_project_git!(*git_commit_arguments(version))
+        push_component_branch_with_retry!(branch)
       end
 
-      def git_push_branch_command(branch)
-        "git push --no-verify origin #{branch} --quiet"
+      def sync_component_repository!(branch)
+        run_project_git!('fetch', 'origin', branch)
+        run_project_git!('rebase', '--autostash', "origin/#{branch}")
+      rescue ::StandardError
+        abort_component_rebase
+        raise
       end
 
-      def git_push_tag_command(tag)
-        "git push --no-verify origin refs/tags/#{tag} --force --quiet"
+      def push_component_branch_with_retry!(branch)
+        attempts = 1
+        begin
+          run_project_git!(*git_push_branch_arguments(branch))
+        rescue ::StandardError => e
+          raise unless retry_git_push?(e, attempts)
+
+          log_component_push_retry(attempts)
+          sync_component_repository!(branch)
+          attempts += 1
+          retry
+        end
       end
 
-      def git_delete_remote_tag_command(tag)
-        "(git push --no-verify origin :refs/tags/#{tag} --quiet >/dev/null 2>&1 || true)"
+      def log_component_push_retry(attempts)
+        max_retries = GitPushRetry::MAX_GIT_PUSH_ATTEMPTS - 1
+        message = "-> 检测到组件仓库并发更新，拉取并 rebase 后重试 (#{attempts}/#{max_retries})"
+        UI.puts message.yellow
       end
 
-      def git_recreate_tag_commands(tag)
-        [
-          "(git tag -d #{tag} >/dev/null 2>&1 || true)",
-          "git tag -a #{tag} -m \"[Update] (#{tag})\"",
-        ]
+      def abort_component_rebase
+        run_project_git!('rebase', '--abort')
+      rescue ::StandardError
+        nil
+      end
+
+      def recreate_and_push_component_tag!(tag)
+        run_project_git_ignoring_failure('tag', '-d', tag)
+        run_project_git!(*git_tag_arguments(tag))
+        run_project_git_ignoring_failure(*git_delete_remote_tag_arguments(tag))
+        run_project_git!(*git_push_tag_arguments(tag))
+      end
+
+      def run_project_git!(*arguments)
+        stdout, stderr, status = Open3.capture3(
+          'git', *arguments, chdir: project_git_directory
+        )
+        return stdout if status.success?
+
+        output = [stdout, stderr].reject(&:empty?).join("\n").strip
+        raise Informative, "Git 命令失败：git #{arguments.join(' ')}\n#{output}"
+      end
+
+      def run_project_git_ignoring_failure(*arguments)
+        run_project_git!(*arguments)
+      rescue Informative
+        nil
+      end
+
+      def project_git_directory
+        return @project_path unless @project_path.to_s.empty?
+        return Pathname(@name).expand_path.dirname.to_s unless @name.to_s.empty?
+
+        Dir.pwd
+      end
+
+      def git_commit_arguments(version)
+        ['commit', '--no-verify', '-m', "[Update] (#{version})"]
+      end
+
+      def git_push_branch_arguments(branch)
+        ['push', '--no-verify', 'origin', branch, '--quiet']
+      end
+
+      def git_push_tag_arguments(tag)
+        ['push', '--no-verify', 'origin', "refs/tags/#{tag}", '--force', '--quiet']
+      end
+
+      def git_delete_remote_tag_arguments(tag)
+        ['push', '--no-verify', 'origin', ":refs/tags/#{tag}", '--quiet']
+      end
+
+      def git_tag_arguments(tag)
+        ['tag', '-a', tag, '-m', "[Update] (#{tag})"]
       end
 
       # 推送新版本到私有库
@@ -769,7 +826,7 @@ module Pod
           config.silent = false
           UI.puts "-> (#{@new_version})发布成功！".green unless @from_wukong
           config.silent = !@debug
-        rescue StandardError => e
+        rescue ::StandardError => e
           restore_old_version_to_podspec
           config.silent = false
           UI.puts "-> #{e}".red
@@ -790,7 +847,7 @@ module Pod
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = !@debug
-        rescue StandardError => e
+        rescue ::StandardError => e
           clean
           config.silent = false
           UI.puts "-> (#{version})发布失败：#{e.message}".red
@@ -811,7 +868,7 @@ module Pod
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = !@debug
-        rescue StandardError => e
+        rescue ::StandardError => e
           restore_old_version_to_podspec if @beta_version_publish
           config.silent = false
           UI.puts "-> (#{version})发布失败：#{e.message}".red
