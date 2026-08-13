@@ -250,6 +250,7 @@ module Pod
                         end
         @artifact_manifest = artifact_manifest_for_version(zip_file_path, version)
         validate_artifact_manifest!(@artifact_manifest)
+        validate_artifact_zip_identity!(@artifact_manifest, zip_file_path, version)
         modify_zip_path(zip_file_path, @artifact_manifest)
       end
 
@@ -457,6 +458,7 @@ module Pod
         content.gsub!('    ', '  ')
         content.gsub!('s.vendored_frameworks', '  s.vendored_frameworks')
         content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://#{host}/ios_framework/\#{s.name.to_s}.git\"")
+        content = remove_legacy_architecture_overrides(content)
         File.open(@push_podspec_file, 'w') { |file| file.puts content.strip }
       end
 
@@ -518,6 +520,13 @@ module Pod
         unless manifest.dig('integrity', 'validated') == true
           raise Informative, '构建端未完成 XCFramework 完整性校验'
         end
+        distribution = manifest['distribution'] || {}
+        expected_zip = "#{@new_spec_name}-#{@new_version}.zip"
+        unless distribution['zip_file'] == expected_zip &&
+               distribution['sha256'].to_s.match?(/\A[0-9a-f]{64}\z/i) &&
+               distribution['size'].is_a?(Integer) && distribution['size'].positive?
+          raise Informative, "artifact manifest 缺少有效的 ZIP 身份：#{expected_zip}"
+        end
 
         debug_symbols = manifest['debug_symbols']
         raise Informative, 'artifact manifest 缺少 debug_symbols 声明' unless debug_symbols.is_a?(Array)
@@ -543,6 +552,49 @@ module Pod
           UI.puts "-> #{@new_spec_name} #{@new_version} 仅支持真机，继续发布 device-only XCFramework"
         end
         manifest
+      end
+
+      def validate_artifact_zip_identity!(manifest, zip_path, version)
+        distribution = manifest.fetch('distribution')
+        zip_file = "#{@new_spec_name}-#{version}.zip"
+        directory = zip_path.sub(%r{\Arepository/files/}, '')
+        repository_path = URI.encode_www_form_component(File.join(directory, zip_file))
+        headers = send_request(
+          HEAD,
+          "/projects/#{get_project_id}/repository/files/#{repository_path}",
+          { 'ref' => 'main' }
+        )
+
+        actual_sha256 = headers['x-gitlab-content-sha256'].to_s
+        actual_size = headers['x-gitlab-size'].to_i
+        unless distribution['zip_file'] == zip_file &&
+               distribution['sha256'].to_s.casecmp?(actual_sha256) &&
+               distribution['size'] == actual_size
+          raise Informative, "#{zip_file} 与 artifact manifest 的 SHA-256/大小不一致，拒绝发布"
+        end
+        manifest
+      end
+
+      def remove_legacy_architecture_overrides(content)
+        keys = [
+          'VALID_ARCHS',
+          'EXCLUDED_ARCHS[sdk=iphonesimulator*]',
+        ]
+        assignment = /(?<prefix>^[ \t]*(?:s|ss)\.(?:pod_target_xcconfig|user_target_xcconfig)\s*=\s*\{)(?<body>[^{}]*)(?<suffix>\})[ \t]*\n?/m
+
+        content.gsub(assignment) do
+          prefix = Regexp.last_match[:prefix]
+          suffix = Regexp.last_match[:suffix]
+          body = Regexp.last_match[:body].dup
+          keys.each do |key|
+            body.gsub!(/(['"])#{Regexp.escape(key)}\1\s*=>\s*[^,\n}]+,?/, '')
+          end
+          body.gsub!(/,\s*,/, ',')
+          body.gsub!(/,\s*\z/, '')
+          next '' if body.gsub(/[\s,]/, '').empty?
+
+          "#{prefix}#{body}#{suffix}\n"
+        end
       end
 
       def rewrite_primary_framework_reference(content, artifact_path)

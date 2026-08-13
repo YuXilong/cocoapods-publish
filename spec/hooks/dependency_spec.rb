@@ -109,6 +109,15 @@ module Pod
       @dependency.genrate_requirements(fw, ['100']).should.equal '100'
     end
 
+    it 'maps an explicitly requested legacy compiler version to the stable artifact' do
+      fw = 'BTExplicitLegacyRequirement'
+      write_framework_podspec(fw, '100')
+
+      dependency = Dependency.new(fw, '100.swift-0.0.0')
+
+      dependency.requirement.as_list.should == ['= 100']
+    end
+
     it 'falls back to the current compiler legacy artifact when no stable version exists' do
       fw = 'BTLegacyRequirement'
       write_framework_podspec(fw, '100', swift_version: Dependency::SWIFT_VERSION)

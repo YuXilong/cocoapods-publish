@@ -30,7 +30,7 @@ module Pod
       base_name = name.split('/').first
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
-         legacy_swift_framework?(base_name)
+         (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
         if name.include?('/')
           unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{base_name}/#{prefix}" }.empty?
             requirements = [genrate_requirements(base_name, requirements)]
@@ -41,6 +41,12 @@ module Pod
       end
 
       origin_initialize(name, *requirements)
+    end
+
+    def explicit_legacy_requirement?(requirements)
+      requirements.any? do |requirement|
+        requirement.is_a?(String) && LEGACY_SWIFT_VERSION_PATTERN.match?(requirement)
+      end
     end
 
     def genrate_requirements(name, requirements)

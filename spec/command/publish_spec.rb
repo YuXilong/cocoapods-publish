@@ -67,6 +67,11 @@ module Pod
           },
           'debug_symbols' => [],
           'integrity' => { 'validated' => true },
+          'distribution' => {
+            'zip_file' => 'MyKit-101.zip',
+            'sha256' => 'a' * 64,
+            'size' => 1024,
+          },
         }
         device_only = Marshal.load(Marshal.dump(supported))
         device_only['platforms']['ios']['simulator'] = {
@@ -113,6 +118,70 @@ module Pod
         rewritten.should.include("'MyKit.xcframework'")
         rewritten.should.include("'VendorSDK.framework'")
         rewritten.should.not.include("'MyKit.framework'")
+      end
+
+      it 'removes obsolete architecture overrides while preserving other xcconfig values' do
+        content = <<~SPEC
+          s.pod_target_xcconfig = {
+            'VALID_ARCHS' => 'arm64',
+            'ENABLE_BITCODE' => 'NO',
+            'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64'
+          }
+          s.user_target_xcconfig = { 'VALID_ARCHS' => 'arm64' }
+        SPEC
+
+        rewritten = @command.send(:remove_legacy_architecture_overrides, content)
+
+        rewritten.should.not.include('VALID_ARCHS')
+        rewritten.should.not.include('EXCLUDED_ARCHS')
+        rewritten.should.include("'ENABLE_BITCODE' => 'NO'")
+        rewritten.should.not.include('user_target_xcconfig')
+      end
+
+      it 'verifies that the ready sidecar identifies the remote zip content' do
+        manifest = {
+          'distribution' => {
+            'zip_file' => 'MyKit-101.zip',
+            'sha256' => 'a' * 64,
+            'size' => 1024,
+          },
+        }
+        @command.stubs(:get_project_id).returns(42)
+        @command.expects(:send_request).with(
+          Command::Publish::HEAD,
+          '/projects/42/repository/files/101%2FMyKit-101.zip',
+          { 'ref' => 'main' }
+        ).returns(
+          'x-gitlab-content-sha256' => 'a' * 64,
+          'x-gitlab-size' => '1024'
+        )
+
+        @command.send(
+          :validate_artifact_zip_identity!,
+          manifest,
+          'repository/files/101',
+          '101'
+        ).should == manifest
+      end
+
+      it 'rejects a sidecar that is not bound to a zip' do
+        manifest = {
+          'schema_version' => 1,
+          'component' => { 'name' => 'MyKit', 'version' => '101' },
+          'artifact' => { 'type' => 'xcframework', 'path' => 'MyKit.xcframework', 'linkage' => 'static' },
+          'platforms' => {
+            'ios' => {
+              'device' => { 'status' => 'supported', 'architectures' => ['arm64'] },
+              'simulator' => { 'status' => 'unavailable', 'architectures' => [] },
+            },
+          },
+          'debug_symbols' => [],
+          'integrity' => { 'validated' => true },
+        }
+
+        should.raise Informative do
+          @command.send(:validate_artifact_manifest!, manifest)
+        end
       end
 
       it 'emits one structured capability record per published artifact' do

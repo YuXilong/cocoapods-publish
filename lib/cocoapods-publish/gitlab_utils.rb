@@ -12,6 +12,7 @@ module Pod
 
       GET = 0
       POST = 1
+      HEAD = 2
 
       # 检查仓库状态 没有就创建一个新的仓库
       def check_remote_repo
@@ -101,7 +102,7 @@ module Pod
           request['Content-Type'] = 'application/json'
         else
           uri.query = URI.encode_www_form(params)
-          request = Net::HTTP::Get.new(uri)
+          request = type == HEAD ? Net::HTTP::Head.new(uri) : Net::HTTP::Get.new(uri)
         end
 
         request['Authorization'] = "Bearer #{ENV['GIT_LAB_TOKEN']}"
@@ -112,6 +113,8 @@ module Pod
         end
 
         if (200...300).include?(response.code.to_i)
+          return response.each_header.to_h if type == HEAD
+
           JSON(response.body)
         else
           puts "-> 接口请求失败：#{uri}".red
