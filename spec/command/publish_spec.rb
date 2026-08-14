@@ -137,6 +137,24 @@ module Pod
 
         arguments.should.include('--only-mixup')
       end
+
+      it 'keeps the original artifact name for a subspec-only variant' do
+        command = Command::Publish.allocate
+        command.instance_variable_set(:@only_mixup, true)
+        command.instance_variable_set(:@pod_name, 'BTUserCardPanelNew')
+        command.instance_variable_set(:@new_version, '108')
+        command.instance_variable_set(:@new_class_prefixes, [])
+        command.instance_variable_set(:@subspecs, ['PLA'])
+        command.instance_variable_set(:@mixup_func_class_prefixes, [])
+        command.expects(:save_new_version_to_podspec).once
+        command.expects(:save_new_default_subspec).with('PLA').once
+        command.expects(:update_zip_file_for_version).with('108.PLA-S').once
+        command.expects(:push_framework_pod).once
+
+        command.send(:push_mixup_pods)
+
+        command.instance_variable_get(:@new_spec_name).should == 'BTUserCardPanelNew'
+      end
     end
 
 
@@ -280,6 +298,7 @@ module Pod
       it 'emits one structured capability record per published artifact' do
         manifest = {
           'component' => { 'name' => 'MyKit', 'version' => '101' },
+          'artifact' => { 'type' => 'xcframework' },
           'platforms' => {
             'ios' => {
               'device' => { 'architectures' => ['arm64'] },
@@ -293,6 +312,7 @@ module Pod
         record.should == {
           'name' => 'MyKit',
           'version' => '101',
+          'format' => 'xcframework',
           'device' => ['arm64'],
           'simulator' => [],
           'status' => 'device_only',

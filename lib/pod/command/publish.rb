@@ -239,7 +239,6 @@ module Pod
         end
         @subspecs.each do |cls|
           @new_spec_name = @pod_name
-          @new_spec_name = @new_spec_name.gsub('BT', cls) unless @pod_name.include?('BTBytedEffect')
           meta = "#{cls}-S"
           @new_version = append_version_meta(version, meta)
           save_new_version_to_podspec
@@ -633,6 +632,7 @@ module Pod
         {
           'name' => manifest.dig('component', 'name'),
           'version' => manifest.dig('component', 'version'),
+          'format' => manifest.dig('artifact', 'type'),
           'device' => manifest.dig('platforms', 'ios', 'device', 'architectures'),
           'simulator' => simulator['architectures'],
           'status' => simulator['status'] == 'supported' ? 'supported' : 'device_only',
