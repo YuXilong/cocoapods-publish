@@ -27,6 +27,14 @@ module Pod
         command.instance_variable_get(:@skip_framework_publish_auto).should == true
       end
 
+      it 'accepts publishing only obfuscated binary variants' do
+        command = Command.parse(
+          %w{ publish BaiTuFrameworkPods Example.podspec --only-mixup --new-class-prefixes=PLA }
+        )
+
+        command.instance_variable_get(:@only_mixup).should == true
+      end
+
       it 'bypasses local hooks for generated version commits' do
         command = Command::Publish.allocate
 
@@ -90,6 +98,44 @@ module Pod
           ['rebase', '--autostash', 'origin/main'],
           ['push', '--no-verify', 'origin', 'main', '--quiet'],
         ]
+      end
+    end
+
+    describe 'only-mixup publishing' do
+      it 'skips the missing normal artifact and publishes only mapped variants' do
+        command = Command::Publish.allocate
+        command.instance_variable_set(:@only_mixup, true)
+        command.instance_variable_set(:@pod_name, 'BTIMModule')
+        command.instance_variable_set(:@new_version, '258.b1')
+        command.instance_variable_set(:@new_class_prefixes, ['PLA=>PLACHATLINKMODULE'])
+        command.instance_variable_set(:@subspecs, [])
+        command.instance_variable_set(:@mixup_func_class_prefixes, ['PLA'])
+        command.expects(:save_new_version_to_podspec).once
+        command.expects(:save_new_default_subspec).with('PLA').once
+        command.expects(:update_zip_file_for_version).with('258.b1.PLA-CF').once
+        command.expects(:push_framework_pod).once
+
+        command.send(:push_mixup_pods)
+
+        command.instance_variable_get(:@new_spec_name).should == 'PLACHATLINKMODULE'
+      end
+
+      it 'propagates only-mixup from auto packaging to binary publishing' do
+        command = Command::Publish::Auto.allocate
+        command.instance_variable_set(:@podspec, 'BTIMModule.podspec')
+        command.instance_variable_set(:@from_wukong, true)
+        command.instance_variable_set(:@debug, false)
+        command.instance_variable_set(:@beta_version_auto, true)
+        command.instance_variable_set(:@auto_subspecs, nil)
+        command.instance_variable_set(:@auto_mixup, true)
+        command.instance_variable_set(:@auto_new_class_prefixes, 'PLA=>PLACHATLINKMODULE')
+        command.instance_variable_set(:@auto_mixup_func_class_prefixes, 'PLA')
+        command.instance_variable_set(:@auto_mixup_property_class_prefixes, '')
+        command.instance_variable_set(:@only_mixup_auto, true)
+
+        arguments = command.send(:framework_publish_arguments, true)
+
+        arguments.should.include('--only-mixup')
       end
     end
 

@@ -186,5 +186,40 @@ module Pod
 
       @installer.send(:create_analyzer).should.equal analyzer
     end
+
+    it 'pins the simulator-capable YYImage WebP version while fixing Texture' do
+      texture_root = Struct.new(:name).new('Texture')
+      yyimage_root = Struct.new(:name).new('YYImage')
+      spec = Struct.new(:root, :name, :version)
+      target_definition = Object.new
+      target_definition.instance_variable_set(:@internal_hash, { 'dependencies' => [] })
+      analysis_result = Struct.new(:specs_by_target).new(
+        target_definition => [
+          spec.new(texture_root, 'Texture/Core', Pod::Version.new('3.1.0')),
+          spec.new(yyimage_root, 'YYImage/WebP', Pod::Version.new('1.0.4')),
+        ]
+      )
+      @installer.instance_variable_set(
+        :@sandbox,
+        Struct.new(:root, :development_pods).new(Pathname(@tmp_dir), {})
+      )
+      @installer.stubs(:analysis_result).returns(analysis_result)
+      @installer.stubs(:texture_user_pinned?).returns(false)
+      @installer.stubs(:baitu_specs_available?).returns(true)
+      @installer.expects(:origin_resolve_dependencies).once.returns(:resolved)
+
+      @installer.send(:reresolve_for_texture_if_needed, :initial).should == :resolved
+
+      dependencies = target_definition.instance_variable_get(:@internal_hash)['dependencies']
+      dependencies.should.include(
+        'Texture/Core' => [
+          {
+            :git => 'https://github.com/BaiTu-iOS/Texture.git',
+            :tag => '3.1.0.BAITU',
+          },
+        ]
+      )
+      dependencies.should.include('YYImage/WebP' => ['1.0.4.BAITU'])
+    end
   end
 end

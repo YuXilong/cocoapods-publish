@@ -30,6 +30,7 @@ module Pod
           %w[--beta 发布beta版本],
           %w[--subspecs 同时构建的subspec],
           %w[--mixup-publish 混淆],
+          %w[--only-mixup 仅发布混淆二进制版本，不读取或发布普通版产物],
           %w[--new-class-prefixes 混淆时要修改的目标类前缀，多个用,隔开.默认为：`MNL,PPL`],
         ]
       end
@@ -63,6 +64,7 @@ module Pod
 
         # 是否混淆
         @mixup_publish = argv.flag?('mixup-publish', false)
+        @only_mixup = argv.flag?('only-mixup', false)
 
         # 类混淆
         new_class_prefixes = argv.option('new-class-prefixes')
@@ -197,11 +199,13 @@ module Pod
 
 
       def push_mixup_pods
-        # 发布主版本
-        @new_spec_name = @pod_name
-        save_new_version_to_podspec
-        update_zip_file_for_version(@new_version)
-        push_framework_pod
+        unless @only_mixup
+          # 发布主版本
+          @new_spec_name = @pod_name
+          save_new_version_to_podspec
+          update_zip_file_for_version(@new_version)
+          push_framework_pod
+        end
 
         return if @new_class_prefixes.count.zero? && @subspecs.count.zero?
 

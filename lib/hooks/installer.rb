@@ -196,6 +196,7 @@ module Pod
     TEXTURE_VERSION_FIXED = '3.2.0'   # >= 此版本视为已含修复，跳过
     TEXTURE_FORK_SOURCE = { git: 'https://github.com/BaiTu-iOS/Texture.git', tag: '3.1.0.BAITU' }.freeze
     TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
+    YYIMAGE_WEBP_VERSION = '1.0.4.BAITU'.freeze
     BAITU_SPECS_MARK = 'baitu-specs'
     TEXT_LAYOUT_CHAINED_COMPARISON_RELATIVE_PATHS = [
       File.join('YYKit', 'YYKit', 'Text', 'Component', 'YYTextLayout.m'),
@@ -221,7 +222,12 @@ module Pod
 
       # 收集每个 target 实际用到的、未修复的 Texture subspec
       inject_map = {}
+      yyimage_webp_targets = {}
       analysis_result.specs_by_target.each do |td, specs|
+        yyimage_webp_targets[td] = true if specs.any? do |spec|
+          spec.name == 'YYImage/WebP' && spec.version.to_s != YYIMAGE_WEBP_VERSION
+        end
+
         tex = specs.select { |s| s.root.name == 'Texture' }
         next if tex.empty?
         next if tex.all? { |s| texture_spec_fixed?(s) }
@@ -232,18 +238,26 @@ module Pod
       target = baitu_specs_available? ? TEXTURE_FORK_SOURCE : TEXTURE_OFFICIAL_SOURCE
       ext = { git: target[:git], tag: target[:tag] }
 
-      inject_map.each do |td, names|
+      (inject_map.keys | yyimage_webp_targets.keys).each do |td|
+        names = inject_map.fetch(td, [])
         ih = td.instance_variable_get(:@internal_hash)
         deps = (ih['dependencies'] || []).dup
         # 去掉原有的同名 Texture(子)依赖，避免与外部源版本冲突
         deps.reject! { |d| names.include?(texture_dep_name(d)) }
         names.each { |n| deps << { n => [ext.dup] } }
+        if yyimage_webp_targets.key?(td)
+          deps.reject! { |d| texture_dep_name(d).to_s == 'YYImage/WebP' }
+          deps << { 'YYImage/WebP' => [YYIMAGE_WEBP_VERSION] }
+        end
         ih['dependencies'] = deps
         td.instance_variable_set(:@internal_hash, ih)
       end
 
       all_names = inject_map.values.flatten.uniq.sort
       puts "[cocoapods-publish] Texture 含主线程自锁缺陷，已为 #{all_names.join(', ')} 注入外部源 → #{target[:git]} @ #{target[:tag]}，重新解析依赖（避免测试卡死）".yellow
+      unless yyimage_webp_targets.empty?
+        puts "[cocoapods-publish] 已固定 YYImage/WebP #{YYIMAGE_WEBP_VERSION}，启用模拟器架构支持".yellow
+      end
 
       # 用改过的 @podfile 重新解析：外部源进入依赖图并触发重下
       origin_resolve_dependencies

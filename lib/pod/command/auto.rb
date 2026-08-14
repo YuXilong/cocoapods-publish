@@ -23,6 +23,7 @@ module Pod
             %w[--from-wukong 发起者为`wukong`],
             %w[--debug 输出详细构建日志],
             %w[--beta 发布beta版本],
+            %w[--only-mixup 仅构建并发布混淆二进制版本],
             %w[--continue-from-upload 从上传任务恢复发布],
             %w[--skip-framework-publish 仅发布源码，跳过二进制产物发布],
             %w[--subspecs 同时构建的subspec]
@@ -182,16 +183,7 @@ module Pod
           else
             puts '-> 正在发布到二进制私有库...'.yellow
           end
-          params = ['BaiTuFrameworkPods', @podspec]
-          params << '--from-wukong' if @from_wukong
-          params << '--debug' if @debug
-          params << '--beta' if @beta_version_auto
-          params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
-          params << '--mixup-publish' if @auto_mixup
-          params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
-          params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
-          params << "--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}" unless @auto_mixup_property_class_prefixes.empty?
-          params << '--no-increase-version' unless should_increase_version
+          params = framework_publish_arguments(should_increase_version)
           argv = CLAide::ARGV.coerce(params)
           Publish.new(argv).run
           end_time = (Time.now.to_f * 1000).to_i
@@ -203,6 +195,23 @@ module Pod
           end
           puts '-> 发布完成'.green unless @from_wukong
 
+        end
+
+        def framework_publish_arguments(should_increase_version)
+          params = ['BaiTuFrameworkPods', @podspec]
+          params << '--from-wukong' if @from_wukong
+          params << '--debug' if @debug
+          params << '--beta' if @beta_version_auto
+          params << "--subspecs=#{@auto_subspecs}" unless @auto_subspecs.nil?
+          params << '--mixup-publish' if @auto_mixup
+          params << '--only-mixup' if @only_mixup_auto
+          params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
+          params << "--mixup-func-class-prefixes=#{@auto_mixup_func_class_prefixes}"
+          unless @auto_mixup_property_class_prefixes.empty?
+            params << "--mixup-property-class-prefixes=#{@auto_mixup_property_class_prefixes}"
+          end
+          params << '--no-increase-version' unless should_increase_version
+          params
         end
 
         def get_current_branch
