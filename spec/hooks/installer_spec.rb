@@ -219,8 +219,9 @@ module Pod
           },
         ]
       )
-      dependencies.should.include('YYImage' => ['1.0.4.BAITU'])
-      dependencies.should.include('YYImage/WebP' => ['1.0.4.BAITU'])
+      yyimage_source = { :source => 'https://github.com/BaiTu-iOS/baitu-specs.git' }
+      dependencies.should.include('YYImage' => ['1.0.4.BAITU', yyimage_source])
+      dependencies.should.include('YYImage/WebP' => ['1.0.4.BAITU', yyimage_source])
     end
   end
 end

@@ -197,6 +197,7 @@ module Pod
     TEXTURE_FORK_SOURCE = { git: 'https://github.com/BaiTu-iOS/Texture.git', tag: '3.1.0.BAITU' }.freeze
     TEXTURE_OFFICIAL_SOURCE = { git: 'https://github.com/TextureGroup/Texture.git', tag: '3.2.0' }.freeze
     YYIMAGE_WEBP_VERSION = '1.0.4.BAITU'.freeze
+    YYIMAGE_FORK_SOURCE = { source: 'https://github.com/BaiTu-iOS/baitu-specs.git' }.freeze
     BAITU_SPECS_MARK = 'baitu-specs'
     TEXT_LAYOUT_CHAINED_COMPARISON_RELATIVE_PATHS = [
       File.join('YYKit', 'YYKit', 'Text', 'Component', 'YYTextLayout.m'),
@@ -248,7 +249,9 @@ module Pod
         if yyimage_webp_targets.key?(td)
           yyimage_dependencies = %w[YYImage YYImage/WebP]
           deps.reject! { |d| yyimage_dependencies.include?(texture_dep_name(d).to_s) }
-          yyimage_dependencies.each { |name| deps << { name => [YYIMAGE_WEBP_VERSION] } }
+          yyimage_dependencies.each do |name|
+            deps << { name => [YYIMAGE_WEBP_VERSION, YYIMAGE_FORK_SOURCE.dup] }
+          end
         end
         ih['dependencies'] = deps
         td.instance_variable_set(:@internal_hash, ih)

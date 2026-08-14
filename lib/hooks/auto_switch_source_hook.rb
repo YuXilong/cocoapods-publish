@@ -161,7 +161,12 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
 
   host = (ENV['GIT_LAB_HOST']).to_s.freeze
   # 添加源码私有源 && 二进制私有源 ssh://git@#{host}:1022/ios_framework/frameworkpods.git ssh://git@#{host}:1022/ios_component/baitupods.git
-  added_sources = %w[https://cdn.cocoapods.org/ https://github.com/volcengine/volcengine-specs.git https://github.com/BaiTu-iOS/baitu-specs.git https://github.com/aliyun/aliyun-specs.git]
+  added_sources = [
+    'https://cdn.cocoapods.org/',
+    'https://github.com/volcengine/volcengine-specs.git',
+    Pod::Installer::YYIMAGE_FORK_SOURCE[:source],
+    'https://github.com/aliyun/aliyun-specs.git'
+  ]
   added_sources << if use_framework
                      "https://#{host}/ios_framework/frameworkpods.git"
                    else

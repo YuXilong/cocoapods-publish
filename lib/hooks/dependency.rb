@@ -30,7 +30,9 @@ module Pod
       end
 
       base_name = name.split('/').first
-      requirements = [YYIMAGE_SIMULATOR_VERSION] if yyimage_legacy_requirement?(base_name, requirements)
+      if yyimage_simulator_requirement?(base_name, requirements)
+        requirements = [YYIMAGE_SIMULATOR_VERSION, Installer::YYIMAGE_FORK_SOURCE.dup]
+      end
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
          (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
@@ -46,14 +48,15 @@ module Pod
       origin_initialize(name, *requirements)
     end
 
-    def yyimage_legacy_requirement?(base_name, requirements)
+    def yyimage_simulator_requirement?(base_name, requirements)
       return false unless base_name == 'YYImage' && requirements.one?
 
       requirement = requirements.first
       requirement = requirement.first if requirement.is_a?(Array) && requirement.one?
       return false unless requirement.is_a?(String)
 
-      requirement.strip.match?(/\A(?:=\s*)?#{Regexp.escape(YYIMAGE_LEGACY_VERSION)}\z/)
+      normalized_requirement = requirement.strip.sub(/\A=\s*/, '')
+      [YYIMAGE_LEGACY_VERSION, YYIMAGE_SIMULATOR_VERSION].include?(normalized_requirement)
     end
 
     def explicit_legacy_requirement?(requirements)

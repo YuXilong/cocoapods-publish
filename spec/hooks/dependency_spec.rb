@@ -141,16 +141,34 @@ module Pod
     end
 
     it 'maps the legacy YYImage root and WebP exact versions to the simulator-capable release' do
-      Dependency.new('YYImage', '1.0.4').requirement.as_list.should == ['= 1.0.4.BAITU']
-      Dependency.new('YYImage/WebP', '1.0.4').requirement.as_list.should == ['= 1.0.4.BAITU']
+      root = Dependency.new('YYImage', '1.0.4')
+      webp = Dependency.new('YYImage/WebP', '1.0.4')
+
+      root.requirement.as_list.should == ['= 1.0.4.BAITU']
+      webp.requirement.as_list.should == ['= 1.0.4.BAITU']
+      root.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
+      webp.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
     end
 
     it 'maps YYImage requirements loaded from a podspec consumer' do
-      Dependency.new('YYImage/WebP', ['1.0.4']).requirement.as_list.should == ['= 1.0.4.BAITU']
+      dependency = Dependency.new('YYImage/WebP', ['1.0.4'])
+
+      dependency.requirement.as_list.should == ['= 1.0.4.BAITU']
+      dependency.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
+    end
+
+    it 'routes the simulator-capable YYImage version to the fork Specs repository' do
+      dependency = Dependency.new('YYImage/WebP', '1.0.4.BAITU')
+
+      dependency.requirement.as_list.should == ['= 1.0.4.BAITU']
+      dependency.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
     end
 
     it 'keeps unrelated YYImage versions unchanged' do
-      Dependency.new('YYImage/WebP', '1.0.3').requirement.as_list.should == ['= 1.0.3']
+      dependency = Dependency.new('YYImage/WebP', '1.0.3')
+
+      dependency.requirement.as_list.should == ['= 1.0.3']
+      dependency.podspec_repo.should.be.nil
     end
   end
 end
