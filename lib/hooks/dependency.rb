@@ -14,6 +14,8 @@ module Pod
     SWIFT_VERSION = cached_swift_version
     LEGACY_SWIFT_VERSION_PATTERN = /\.swift-(?<compiler>\d+(?:\.\d+)*)\z/.freeze
     VERSION_REQUIREMENT_OPERATOR_PATTERN = /[<>=~]/.freeze
+    YYIMAGE_LEGACY_VERSION = '1.0.4'.freeze
+    YYIMAGE_SIMULATOR_VERSION = '1.0.4.BAITU'.freeze
 
     alias origin_initialize initialize
 
@@ -28,6 +30,7 @@ module Pod
       end
 
       base_name = name.split('/').first
+      requirements = [YYIMAGE_SIMULATOR_VERSION] if yyimage_legacy_requirement?(base_name, requirements)
       if name.start_with?('BT') &&
          !requirements.last.is_a?(Hash) &&
          (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
@@ -41,6 +44,16 @@ module Pod
       end
 
       origin_initialize(name, *requirements)
+    end
+
+    def yyimage_legacy_requirement?(base_name, requirements)
+      return false unless base_name == 'YYImage' && requirements.one?
+
+      requirement = requirements.first
+      requirement = requirement.first if requirement.is_a?(Array) && requirement.one?
+      return false unless requirement.is_a?(String)
+
+      requirement.strip.match?(/\A(?:=\s*)?#{Regexp.escape(YYIMAGE_LEGACY_VERSION)}\z/)
     end
 
     def explicit_legacy_requirement?(requirements)

@@ -139,5 +139,18 @@ module Pod
 
       @dependency.genrate_requirements(fw, ['~> 100']).should.equal "100.swift-#{Dependency::SWIFT_VERSION}"
     end
+
+    it 'maps the legacy YYImage root and WebP exact versions to the simulator-capable release' do
+      Dependency.new('YYImage', '1.0.4').requirement.as_list.should == ['= 1.0.4.BAITU']
+      Dependency.new('YYImage/WebP', '1.0.4').requirement.as_list.should == ['= 1.0.4.BAITU']
+    end
+
+    it 'maps YYImage requirements loaded from a podspec consumer' do
+      Dependency.new('YYImage/WebP', ['1.0.4']).requirement.as_list.should == ['= 1.0.4.BAITU']
+    end
+
+    it 'keeps unrelated YYImage versions unchanged' do
+      Dependency.new('YYImage/WebP', '1.0.3').requirement.as_list.should == ['= 1.0.3']
+    end
   end
 end

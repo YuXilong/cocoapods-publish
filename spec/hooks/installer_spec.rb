@@ -187,7 +187,7 @@ module Pod
       @installer.send(:create_analyzer).should.equal analyzer
     end
 
-    it 'pins the simulator-capable YYImage WebP version while fixing Texture' do
+    it 'pins the simulator-capable YYImage root and WebP versions while fixing Texture' do
       texture_root = Struct.new(:name).new('Texture')
       yyimage_root = Struct.new(:name).new('YYImage')
       spec = Struct.new(:root, :name, :version)
@@ -219,6 +219,7 @@ module Pod
           },
         ]
       )
+      dependencies.should.include('YYImage' => ['1.0.4.BAITU'])
       dependencies.should.include('YYImage/WebP' => ['1.0.4.BAITU'])
     end
   end

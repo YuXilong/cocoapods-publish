@@ -246,8 +246,9 @@ module Pod
         deps.reject! { |d| names.include?(texture_dep_name(d)) }
         names.each { |n| deps << { n => [ext.dup] } }
         if yyimage_webp_targets.key?(td)
-          deps.reject! { |d| texture_dep_name(d).to_s == 'YYImage/WebP' }
-          deps << { 'YYImage/WebP' => [YYIMAGE_WEBP_VERSION] }
+          yyimage_dependencies = %w[YYImage YYImage/WebP]
+          deps.reject! { |d| yyimage_dependencies.include?(texture_dep_name(d).to_s) }
+          yyimage_dependencies.each { |name| deps << { name => [YYIMAGE_WEBP_VERSION] } }
         end
         ih['dependencies'] = deps
         td.instance_variable_set(:@internal_hash, ih)
@@ -256,7 +257,7 @@ module Pod
       all_names = inject_map.values.flatten.uniq.sort
       puts "[cocoapods-publish] Texture 含主线程自锁缺陷，已为 #{all_names.join(', ')} 注入外部源 → #{target[:git]} @ #{target[:tag]}，重新解析依赖（避免测试卡死）".yellow
       unless yyimage_webp_targets.empty?
-        puts "[cocoapods-publish] 已固定 YYImage/WebP #{YYIMAGE_WEBP_VERSION}，启用模拟器架构支持".yellow
+        puts "[cocoapods-publish] 已固定 YYImage 和 YYImage/WebP #{YYIMAGE_WEBP_VERSION}，启用模拟器架构支持".yellow
       end
 
       # 用改过的 @podfile 重新解析：外部源进入依赖图并触发重下
