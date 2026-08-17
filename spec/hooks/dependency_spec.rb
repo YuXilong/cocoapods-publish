@@ -150,6 +150,13 @@ module Pod
       webp.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
     end
 
+    it 'pins an unversioned transitive YYImage dependency before the first resolution' do
+      dependency = Dependency.new('YYImage')
+
+      dependency.requirement.as_list.should == ['= 1.0.4.BAITU']
+      dependency.podspec_repo.should == Installer::YYIMAGE_FORK_SOURCE[:source]
+    end
+
     it 'maps YYImage requirements loaded from a podspec consumer' do
       dependency = Dependency.new('YYImage/WebP', ['1.0.4'])
 

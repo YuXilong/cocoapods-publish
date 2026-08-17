@@ -49,10 +49,19 @@ module Pod
     end
 
     def yyimage_simulator_requirement?(base_name, requirements)
-      return false unless base_name == 'YYImage' && requirements.one?
+      return false unless base_name == 'YYImage'
+
+      # YYWebImage 等传递依赖通常只声明 YYImage、不带版本。如果放任 CocoaPods
+      # 先从 trunk 选中公开版，后续 YYImage/WebP 无法再切到同名私有 Specs。
+      return true if requirements.empty?
+      return false unless requirements.one?
 
       requirement = requirements.first
-      requirement = requirement.first if requirement.is_a?(Array) && requirement.one?
+      if requirement.is_a?(Array)
+        return true if requirement.empty?
+
+        requirement = requirement.first if requirement.one?
+      end
       return false unless requirement.is_a?(String)
 
       normalized_requirement = requirement.strip.sub(/\A=\s*/, '')
