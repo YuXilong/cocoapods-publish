@@ -319,6 +319,48 @@ module Pod
         }
       end
 
+      it 'writes and flushes the capability record on the process output stream' do
+        manifest = {
+          'component' => { 'name' => 'MyKit', 'version' => '101' },
+          'artifact' => { 'type' => 'xcframework' },
+          'platforms' => {
+            'ios' => {
+              'device' => { 'architectures' => ['arm64'] },
+              'simulator' => { 'status' => 'unavailable', 'architectures' => [] },
+            },
+          },
+        }
+        output = mock('artifact protocol output')
+        output.expects(:puts).with(
+          '-> [WK_ARTIFACT] {"name":"MyKit","version":"101","format":"xcframework",' \
+          '"device":["arm64"],"simulator":[],"status":"device_only"}'
+        )
+        output.expects(:flush)
+
+        @command.send(:emit_artifact_capability, manifest, output)
+      end
+
+      it 'emits the capability record only after the binary spec is published' do
+        manifest = { 'component' => { 'name' => 'MyKit', 'version' => '101' } }
+        push_spec = mock('generated binary spec')
+        push_spec.stubs(:attributes_hash).returns('version' => '101')
+        repo_push = mock('binary spec push')
+        sequence = sequence('binary publish protocol')
+
+        @command.instance_variable_set(:@push_spec, push_spec)
+        @command.instance_variable_set(:@source, 'BaiTuFrameworkPods')
+        @command.instance_variable_set(:@push_podspec_file, '/tmp/MyKit.podspec')
+        @command.instance_variable_set(:@sources, ['BaiTuFrameworkPods'])
+        @command.instance_variable_set(:@artifact_manifest, manifest)
+        @command.instance_variable_set(:@from_wukong, true)
+        @command.instance_variable_set(:@debug, false)
+        Command::Repo::Push::PushWithoutValid.stubs(:new).returns(repo_push)
+        repo_push.expects(:run).in_sequence(sequence)
+        @command.expects(:emit_artifact_capability).with(manifest).in_sequence(sequence)
+
+        @command.send(:push_framework_pod)
+      end
+
       it 'loads the sidecar from the same remote version directory as the zip' do
         manifest = {
           'schema_version' => 1,

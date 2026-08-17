@@ -639,8 +639,9 @@ module Pod
         }
       end
 
-      def emit_artifact_capability(manifest)
-        puts "-> [WK_ARTIFACT] #{JSON.generate(artifact_capability_record(manifest))}"
+      def emit_artifact_capability(manifest, output = STDOUT)
+        output.puts "-> [WK_ARTIFACT] #{JSON.generate(artifact_capability_record(manifest))}"
+        output.flush
       end
 
       # 适配新的文件保存路径
@@ -845,9 +846,9 @@ module Pod
         config.silent = !@debug
         argv = CLAide::ARGV.coerce([@source, @push_podspec_file, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
-          emit_artifact_capability(@artifact_manifest)
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
+          emit_artifact_capability(@artifact_manifest)
           config.silent = false
           UI.puts "-> (#{version})发布成功！".green unless @from_wukong
           config.silent = !@debug
