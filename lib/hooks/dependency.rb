@@ -25,27 +25,36 @@ module Pod
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
 
-      if requirements.last.is_a?(Hash) && requirements.last.keys.first == :path
-        Dependency.source_dependency[name] = requirements.last[:path]
+      base_name = name.split('/').first
+      if local_path_requirement?(requirements)
+        Dependency.source_dependency[base_name] = requirements.last[:path]
+      elsif Dependency.source_dependency.key?(base_name)
+        requirements = []
       end
 
-      base_name = name.split('/').first
-      if yyimage_simulator_requirement?(base_name, requirements)
-        requirements = [YYIMAGE_SIMULATOR_VERSION, Installer::YYIMAGE_FORK_SOURCE.dup]
-      end
-      if name.start_with?('BT') &&
-         !requirements.last.is_a?(Hash) &&
-         (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
-        if name.include?('/')
-          unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{base_name}/#{prefix}" }.empty?
-            requirements = [genrate_requirements(base_name, requirements)]
+      # :path 依赖是最终来源，不再套用远端二进制版本兼容规则。
+      unless Dependency.source_dependency.key?(base_name)
+        if yyimage_simulator_requirement?(base_name, requirements)
+          requirements = [YYIMAGE_SIMULATOR_VERSION, Installer::YYIMAGE_FORK_SOURCE.dup]
+        end
+        if name.start_with?('BT') &&
+           !requirements.last.is_a?(Hash) &&
+           (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
+          if name.include?('/')
+            unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{base_name}/#{prefix}" }.empty?
+              requirements = [genrate_requirements(base_name, requirements)]
+            end
+          else
+            requirements = [genrate_requirements(name, requirements)]
           end
-        else
-          requirements = [genrate_requirements(name, requirements)]
         end
       end
 
       origin_initialize(name, *requirements)
+    end
+
+    def local_path_requirement?(requirements)
+      requirements.last.is_a?(Hash) && requirements.last.key?(:path)
     end
 
     def yyimage_simulator_requirement?(base_name, requirements)

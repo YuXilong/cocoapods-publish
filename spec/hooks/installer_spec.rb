@@ -9,9 +9,13 @@ module Pod
       @installer = Installer.allocate
       @sandbox = Struct.new(:root).new(Pathname(@tmp_dir))
       @installer.instance_variable_set(:@sandbox, @sandbox)
+      @previous_source_dependency = Dependency.source_dependency.dup
+      Dependency.source_dependency.clear
     end
 
     after do
+      Dependency.source_dependency.clear
+      Dependency.source_dependency.merge!(@previous_source_dependency)
       FileUtils.rm_rf(@tmp_dir)
     end
 
@@ -75,6 +79,28 @@ module Pod
       lockfile = File.join(@tmp_dir, 'Podfile.lock')
       File.write(lockfile, content)
       Pod::Config.instance.stubs(:lockfile_path).returns(Pathname(lockfile))
+    end
+
+    def write_local_pod(name, version, dependencies = {})
+      pod_dir = File.join(@tmp_dir, name)
+      FileUtils.mkdir_p(pod_dir)
+      dependency_lines = dependencies.map do |dependency_name, dependency_version|
+        "  s.dependency '#{dependency_name}', '#{dependency_version}'"
+      end.join("\n")
+      File.write(File.join(pod_dir, "#{name}.podspec"), <<~PODSPEC)
+        Pod::Spec.new do |s|
+          s.name = '#{name}'
+          s.version = '#{version}'
+          s.summary = '#{name} test fixture'
+          s.homepage = 'https://example.com/#{name}'
+          s.license = { :type => 'MIT' }
+          s.author = { 'test' => 'test@example.com' }
+          s.source = { :git => 'https://example.com/#{name}.git', :tag => s.version.to_s }
+          s.source_files = 'Sources/**/*'
+        #{dependency_lines}
+        end
+      PODSPEC
+      pod_dir
     end
 
     it 'keeps a lockfile containing only module-stable versions' do
@@ -222,6 +248,36 @@ module Pod
       yyimage_source = { :source => 'https://github.com/BaiTu-iOS/baitu-specs.git' }
       dependencies.should.include('YYImage' => ['1.0.4.BAITU', yyimage_source])
       dependencies.should.include('YYImage/WebP' => ['1.0.4.BAITU', yyimage_source])
+    end
+
+    it 'resolves the Podfile.local version over a transitive exact version' do
+      star_pet_path = write_local_pod('BTStarPetKit', '108')
+      im_module_path = write_local_pod('BTIMModule', '258.b102', 'BTStarPetKit' => '107')
+      podfile_path = File.join(@tmp_dir, 'Podfile')
+      File.write(podfile_path, <<~PODFILE)
+        install! 'cocoapods', :integrate_targets => false
+        platform :ios, '13.0'
+
+        target 'App' do
+          pod 'BTIMModule', :path => '#{im_module_path}'
+          pod 'BTStarPetKit', '107'
+        end
+      PODFILE
+      File.write("#{podfile_path}.local", <<~PODFILE)
+        pod 'BTStarPetKit', :path => '#{star_pet_path}'
+      PODFILE
+      podfile = Podfile.from_file(Pathname(podfile_path))
+      sandbox = Sandbox.new(Pathname(File.join(@tmp_dir, 'Pods')))
+      sandbox.prepare
+      installer = Installer.new(sandbox, podfile)
+
+      installer.resolve_dependencies
+
+      versions = installer.analysis_result.specifications.each_with_object({}) do |spec, result|
+        result[spec.root.name] = spec.version.to_s
+      end
+      versions['BTIMModule'].should == '258.b102'
+      versions['BTStarPetKit'].should == '108'
     end
   end
 end

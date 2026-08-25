@@ -177,5 +177,23 @@ module Pod
       dependency.requirement.as_list.should == ['= 1.0.3']
       dependency.podspec_repo.should.be.nil
     end
+
+    it 'lets a local path pod override transitive exact version requirements' do
+      local_path = File.join(@tmp_dir, 'BTStarPetKit')
+      local_dependency = Dependency.new('BTStarPetKit', path: local_path)
+
+      transitive_dependency = Dependency.new('BTStarPetKit', '107')
+      transitive_subspec_dependency = Dependency.new('BTStarPetKit/Core', '107')
+      unrelated_dependency = Dependency.new('BTIMModule', '258.b102')
+      Dependency.new('YYImage', path: File.join(@tmp_dir, 'YYImage'))
+      special_case_dependency = Dependency.new('YYImage', '1.0.4')
+
+      local_dependency.external_source.should == { path: local_path }
+      transitive_dependency.requirement.should == Requirement.default
+      transitive_subspec_dependency.requirement.should == Requirement.default
+      unrelated_dependency.requirement.as_list.should == ['= 258.b102']
+      special_case_dependency.requirement.should == Requirement.default
+      special_case_dependency.podspec_repo.should.be.nil
+    end
   end
 end
