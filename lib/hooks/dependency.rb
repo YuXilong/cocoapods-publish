@@ -28,6 +28,8 @@ module Pod
       base_name = name.split('/').first
       if local_path_requirement?(requirements)
         Dependency.source_dependency[base_name] = requirements.last[:path]
+        local_names = Dependency.local_dependency_names[base_name] ||= []
+        local_names << name unless local_names.include?(name)
       elsif Dependency.source_dependency.key?(base_name)
         requirements = []
       end
@@ -128,6 +130,15 @@ module Pod
 
     def self.source_dependency
       @@source_dependenc ||= {}
+    end
+
+    def self.local_dependency_names
+      @@local_dependency_names ||= {}
+    end
+
+    def self.local_dependency_name(base_name)
+      local_names = local_dependency_names[base_name] || []
+      local_names.find { |name| name.include?('/') } || local_names.first
     end
 
     # local_framework_version 按组件名 memoize
@@ -259,6 +270,24 @@ module Pod
         end
       end
       nil
+    end
+  end
+
+  class Specification
+    alias publish_origin_dependencies dependencies
+
+    def dependencies(platform = nil)
+      owner_root_name = Specification.root_name(name)
+      publish_origin_dependencies(platform).map do |dependency|
+        # 组件自己的 subspec 关系必须原样保留，否则 BTIMModule/Core 会被
+        # 改写成 BTIMModule 并形成自依赖环。
+        next dependency if dependency.root_name == owner_root_name
+
+        local_name = Dependency.local_dependency_name(dependency.root_name)
+        next dependency if local_name.nil? || local_name == dependency.name
+
+        Dependency.new(local_name)
+      end
     end
   end
 

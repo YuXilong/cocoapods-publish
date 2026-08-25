@@ -150,23 +150,30 @@ module Pod
 
       project_def = @podfile.target_definitions.select { |k, _| k != 'Pods' && !k.include?('Tests') }.values.first
       internal_hash = project_def.instance_variable_get(:@internal_hash)
-      dependencies = internal_hash['dependencies']
+      dependencies = internal_hash['dependencies'] || []
 
-      # 本地版本覆盖主版本
-      local_dependencies = internal_hash_local['dependencies']
-      local_dependencies&.each do |dep|
-          dep.each do |name, _|
-            removed = dependencies.reject! do |item|
-              item == name || (item.is_a?(Hash) && item.keys.map { |k| k.split('/')[0] }.include?(name))
-            end
-            # dependencies << dep if removed
-            dependencies << dep
-            ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' if removed
-          end
-        end
+      # 同一根组件只保留 Podfile.local 的声明，例如主 Podfile 的默认 Core
+      # 会被本地的 Component/VO 替换，而不是同时参与解析。
+      local_dependencies = internal_hash_local['dependencies'] || []
+      local_root_names = local_dependencies.map { |dependency| dependency_root_name(dependency) }.uniq
+      removed_root_names = []
+      dependencies = dependencies.reject do |dependency|
+        root_name = dependency_root_name(dependency)
+        next false unless local_root_names.include?(root_name)
+
+        removed_root_names << root_name
+        true
+      end
+      dependencies.concat(local_dependencies)
+      removed_root_names.uniq.each { |name| ENV["USE_DEV_FRAMEWORK_#{name}"] = '1' }
 
       internal_hash['dependencies'] = dependencies
       @podfile.target_definitions[project_def.label.gsub('Pods-', '')].instance_variable_set(:@internal_hash, internal_hash)
+    end
+
+    def dependency_root_name(dependency)
+      name = dependency.is_a?(Hash) ? dependency.keys.first : dependency
+      name.to_s.split('/').first
     end
 
     # Texture（AsyncDisplayKit）< 3.2.0 主线程自锁修复

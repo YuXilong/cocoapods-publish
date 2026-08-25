@@ -9,14 +9,18 @@ module Pod
       @dependency = Dependency.allocate
       @previous_repos_dir = Config.instance.repos_dir
       @previous_source_dependency = Dependency.source_dependency.dup
+      @previous_local_dependency_names = Dependency.local_dependency_names.transform_values(&:dup)
       Config.instance.repos_dir = Pathname(@tmp_dir)
       Dependency.source_dependency.clear
+      Dependency.local_dependency_names.clear
     end
 
     after do
       Config.instance.repos_dir = @previous_repos_dir
       Dependency.source_dependency.clear
       Dependency.source_dependency.merge!(@previous_source_dependency)
+      Dependency.local_dependency_names.clear
+      Dependency.local_dependency_names.merge!(@previous_local_dependency_names)
       FileUtils.rm_rf(@tmp_dir)
     end
 
@@ -194,6 +198,23 @@ module Pod
       unrelated_dependency.requirement.as_list.should == ['= 258.b102']
       special_case_dependency.requirement.should == Requirement.default
       special_case_dependency.podspec_repo.should.be.nil
+    end
+
+    it 'records the local subspec without changing dependency identity during initialization' do
+      local_dependency = Dependency.new(
+        'BTStarPetKit/VO',
+        path: File.join(@tmp_dir, 'BTStarPetKit')
+      )
+
+      transitive_root = Dependency.new('BTStarPetKit', '107')
+      transitive_core = Dependency.new('BTStarPetKit/Core')
+
+      local_dependency.name.should == 'BTStarPetKit/VO'
+      Dependency.local_dependency_name('BTStarPetKit').should == 'BTStarPetKit/VO'
+      transitive_root.name.should == 'BTStarPetKit'
+      transitive_root.requirement.should == Requirement.default
+      transitive_core.name.should == 'BTStarPetKit/Core'
+      transitive_core.requirement.should == Requirement.default
     end
   end
 end

@@ -10,12 +10,16 @@ module Pod
       @sandbox = Struct.new(:root).new(Pathname(@tmp_dir))
       @installer.instance_variable_set(:@sandbox, @sandbox)
       @previous_source_dependency = Dependency.source_dependency.dup
+      @previous_local_dependency_names = Dependency.local_dependency_names.transform_values(&:dup)
       Dependency.source_dependency.clear
+      Dependency.local_dependency_names.clear
     end
 
     after do
       Dependency.source_dependency.clear
       Dependency.source_dependency.merge!(@previous_source_dependency)
+      Dependency.local_dependency_names.clear
+      Dependency.local_dependency_names.merge!(@previous_local_dependency_names)
       FileUtils.rm_rf(@tmp_dir)
     end
 
@@ -81,12 +85,25 @@ module Pod
       Pod::Config.instance.stubs(:lockfile_path).returns(Pathname(lockfile))
     end
 
-    def write_local_pod(name, version, dependencies = {})
+    def write_local_pod(name, version, dependencies = {}, subspecs = [])
       pod_dir = File.join(@tmp_dir, name)
       FileUtils.mkdir_p(pod_dir)
       dependency_lines = dependencies.map do |dependency_name, dependency_version|
         "  s.dependency '#{dependency_name}', '#{dependency_version}'"
       end.join("\n")
+      source_lines = if subspecs.empty?
+                       "  s.source_files = 'Sources/**/*'"
+                     else
+                       default_subspec = "  s.default_subspec = '#{subspecs.first}'"
+                       definitions = subspecs.map do |subspec|
+                         <<~SUBSPEC.chomp
+                             s.subspec '#{subspec}' do |ss|
+                               ss.source_files = 'Sources/#{subspec}/**/*'
+                             end
+                         SUBSPEC
+                       end
+                       ([default_subspec] + definitions).join("\n")
+                     end
       File.write(File.join(pod_dir, "#{name}.podspec"), <<~PODSPEC)
         Pod::Spec.new do |s|
           s.name = '#{name}'
@@ -96,7 +113,7 @@ module Pod
           s.license = { :type => 'MIT' }
           s.author = { 'test' => 'test@example.com' }
           s.source = { :git => 'https://example.com/#{name}.git', :tag => s.version.to_s }
-          s.source_files = 'Sources/**/*'
+        #{source_lines}
         #{dependency_lines}
         end
       PODSPEC
@@ -213,6 +230,36 @@ module Pod
       @installer.send(:create_analyzer).should.equal analyzer
     end
 
+    it 'replaces Podfile dependencies with Podfile.local subspecs by root name' do
+      podfile_path = File.join(@tmp_dir, 'Podfile')
+      local_podfile_path = "#{podfile_path}.local"
+      File.write(podfile_path, <<~PODFILE)
+        target 'App' do
+          pod 'BTStarPetKit', '107'
+          pod 'BTGallery/VO', '20'
+          pod 'BTPlain/Core'
+          pod 'BTLogger', '10'
+        end
+      PODFILE
+      File.write(local_podfile_path, <<~PODFILE)
+        pod 'BTStarPetKit/VO', :path => '../BaiTuPods/BTStarPetKit'
+        pod 'BTGallery/VO', :path => '../BaiTuPods/BTGallery'
+        pod 'BTPlain/VO', :path => '../BaiTuPods/BTPlain'
+        pod 'BTLocalOnlyKit', :path => '../BaiTuPods/BTLocalOnlyKit'
+      PODFILE
+      podfile = Podfile.from_file(Pathname(podfile_path))
+      @installer.instance_variable_set(:@podfile, podfile)
+      @installer.stubs(:local_podfile_path).returns(Pathname(local_podfile_path))
+
+      @installer.send(:apply_local_podfile)
+
+      dependencies = podfile.target_definitions['App'].instance_variable_get(:@internal_hash)['dependencies']
+      dependency_names = dependencies.map do |dependency|
+        dependency.is_a?(Hash) ? dependency.keys.first : dependency
+      end
+      dependency_names.should == %w[BTLogger BTStarPetKit/VO BTGallery/VO BTPlain/VO BTLocalOnlyKit]
+    end
+
     it 'pins the simulator-capable YYImage root and WebP versions while fixing Texture' do
       texture_root = Struct.new(:name).new('Texture')
       yyimage_root = Struct.new(:name).new('YYImage')
@@ -251,20 +298,25 @@ module Pod
     end
 
     it 'resolves the Podfile.local version over a transitive exact version' do
-      star_pet_path = write_local_pod('BTStarPetKit', '108')
-      im_module_path = write_local_pod('BTIMModule', '258.b102', 'BTStarPetKit' => '107')
+      star_pet_path = write_local_pod('BTStarPetKit', '108', {}, %w[Core VO])
+      im_module_path = write_local_pod(
+        'BTIMModule',
+        '258.b102',
+        { 'BTStarPetKit' => '107' },
+        %w[Core]
+      )
       podfile_path = File.join(@tmp_dir, 'Podfile')
       File.write(podfile_path, <<~PODFILE)
         install! 'cocoapods', :integrate_targets => false
         platform :ios, '13.0'
 
         target 'App' do
-          pod 'BTIMModule', :path => '#{im_module_path}'
+          pod 'BTIMModule', :dev => 1, :path => '#{im_module_path}'
           pod 'BTStarPetKit', '107'
         end
       PODFILE
       File.write("#{podfile_path}.local", <<~PODFILE)
-        pod 'BTStarPetKit', :path => '#{star_pet_path}'
+        pod 'BTStarPetKit/VO', :path => '#{star_pet_path}'
       PODFILE
       podfile = Podfile.from_file(Pathname(podfile_path))
       sandbox = Sandbox.new(Pathname(File.join(@tmp_dir, 'Pods')))
@@ -276,8 +328,11 @@ module Pod
       versions = installer.analysis_result.specifications.each_with_object({}) do |spec, result|
         result[spec.root.name] = spec.version.to_s
       end
+      star_pet_specs = installer.analysis_result.specifications.map(&:name).grep(/\ABTStarPetKit/)
       versions['BTIMModule'].should == '258.b102'
       versions['BTStarPetKit'].should == '108'
+      star_pet_specs.should.include 'BTStarPetKit/VO'
+      star_pet_specs.should.not.include 'BTStarPetKit/Core'
     end
   end
 end
