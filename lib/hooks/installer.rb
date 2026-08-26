@@ -54,6 +54,7 @@ module Pod
       $VERBOSE = nil
 
       apply_local_podfile if local_podfile_path.exist?
+      rebuild_local_path_dependencies
 
       analyzer = origin_resolve_dependencies
 
@@ -131,6 +132,21 @@ module Pod
 
     def local_podfile_path
       Pathname("#{@podfile.defined_in_file}.local")
+    end
+
+    # Podfile.lock 可能保留已经关闭的 :path 来源；只允许当前 Podfile 声明
+    # 决定哪些组件采用本地源码，避免旧锁文件清空显式发布版本。
+    def rebuild_local_path_dependencies
+      Dependency.source_dependency.clear
+      Dependency.local_dependency_names.clear
+      return if @podfile.nil?
+
+      @podfile.dependencies.each do |dependency|
+        path = dependency.external_source&.[](:path)
+        next if path.nil?
+
+        Dependency.register_local_path(dependency.name, path)
+      end
     end
 
     # 增加Podfile.local的支持

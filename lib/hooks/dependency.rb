@@ -26,16 +26,13 @@ module Pod
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
 
       base_name = name.split('/').first
-      if local_path_requirement?(requirements)
-        Dependency.source_dependency[base_name] = requirements.last[:path]
-        local_names = Dependency.local_dependency_names[base_name] ||= []
-        local_names << name unless local_names.include?(name)
-      elsif Dependency.source_dependency.key?(base_name)
+      local_path = local_path_requirement?(requirements)
+      if !local_path && Dependency.source_dependency.key?(base_name)
         requirements = []
       end
 
       # :path 依赖是最终来源，不再套用远端二进制版本兼容规则。
-      unless Dependency.source_dependency.key?(base_name)
+      unless local_path || Dependency.source_dependency.key?(base_name)
         if yyimage_simulator_requirement?(base_name, requirements)
           requirements = [YYIMAGE_SIMULATOR_VERSION, Installer::YYIMAGE_FORK_SOURCE.dup]
         end
@@ -134,6 +131,13 @@ module Pod
 
     def self.local_dependency_names
       @@local_dependency_names ||= {}
+    end
+
+    def self.register_local_path(name, path)
+      base_name = name.split('/').first
+      source_dependency[base_name] = path
+      local_names = local_dependency_names[base_name] ||= []
+      local_names << name unless local_names.include?(name)
     end
 
     def self.local_dependency_name(base_name)

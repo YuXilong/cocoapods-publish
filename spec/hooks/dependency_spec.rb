@@ -185,11 +185,14 @@ module Pod
     it 'lets a local path pod override transitive exact version requirements' do
       local_path = File.join(@tmp_dir, 'BTStarPetKit')
       local_dependency = Dependency.new('BTStarPetKit', path: local_path)
+      Dependency.register_local_path(local_dependency.name, local_path)
 
       transitive_dependency = Dependency.new('BTStarPetKit', '107')
       transitive_subspec_dependency = Dependency.new('BTStarPetKit/Core', '107')
       unrelated_dependency = Dependency.new('BTIMModule', '258.b102')
-      Dependency.new('YYImage', path: File.join(@tmp_dir, 'YYImage'))
+      yyimage_path = File.join(@tmp_dir, 'YYImage')
+      Dependency.new('YYImage', path: yyimage_path)
+      Dependency.register_local_path('YYImage', yyimage_path)
       special_case_dependency = Dependency.new('YYImage', '1.0.4')
 
       local_dependency.external_source.should == { path: local_path }
@@ -204,6 +207,10 @@ module Pod
       local_dependency = Dependency.new(
         'BTStarPetKit/VO',
         path: File.join(@tmp_dir, 'BTStarPetKit')
+      )
+      Dependency.register_local_path(
+        local_dependency.name,
+        local_dependency.external_source[:path]
       )
 
       transitive_root = Dependency.new('BTStarPetKit', '107')

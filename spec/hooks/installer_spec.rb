@@ -260,6 +260,36 @@ module Pod
       dependency_names.should == %w[BTLogger BTStarPetKit/VO BTGallery/VO BTPlain/VO BTLocalOnlyKit]
     end
 
+    it 'ignores stale local sources from the lockfile when the Podfile uses a published version' do
+      podfile_path = File.join(@tmp_dir, 'Podfile')
+      local_podfile_path = "#{podfile_path}.local"
+      File.write(podfile_path, <<~PODFILE)
+        target 'App' do
+          pod 'BTIMModule', '258.b103.VO-CF'
+        end
+      PODFILE
+      File.write(local_podfile_path, <<~PODFILE)
+        pod 'BTStarPetKit', :path => '../BaiTuPods/BTStarPetKit'
+      PODFILE
+      podfile = Podfile.from_file(Pathname(podfile_path))
+
+      # Podfile.lock 仍可能保留上一次本地调试的 :path，不能据此覆盖当前 Podfile。
+      Dependency.new('BTIMModule', path: '../BaiTuPods/BTIMModule')
+      @installer.instance_variable_set(:@podfile, podfile)
+      @installer.precheck_dependencies = false
+      @installer.stubs(:local_podfile_path).returns(Pathname(local_podfile_path))
+      @installer.stubs(:origin_resolve_dependencies).returns(:resolved)
+      @installer.stubs(:reresolve_for_texture_if_needed).with(:resolved).returns(:resolved)
+
+      @installer.resolve_dependencies
+
+      dependency = podfile.target_definitions['App'].dependencies.find do |item|
+        item.root_name == 'BTIMModule'
+      end
+      dependency.requirement.as_list.should == ['= 258.b103.VO-CF']
+      Dependency.source_dependency.keys.should == ['BTStarPetKit']
+    end
+
     it 'pins the simulator-capable YYImage root and WebP versions while fixing Texture' do
       texture_root = Struct.new(:name).new('Texture')
       yyimage_root = Struct.new(:name).new('YYImage')
