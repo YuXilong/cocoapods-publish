@@ -1,4 +1,5 @@
 require File.expand_path('../../spec_helper', __FILE__)
+require 'tmpdir'
 
 module Pod
   describe Command::Publish do
@@ -98,6 +99,145 @@ module Pod
           ['rebase', '--autostash', 'origin/main'],
           ['push', '--no-verify', 'origin', 'main', '--quiet'],
         ]
+      end
+    end
+
+    describe 'multiple podspec publishing' do
+      before do
+        # 这里只验证命令转发；无需安装或调用真实 packager。
+        @created_package_class = !Command.const_defined?(:Package, false)
+        Command.const_set(:Package, Class.new) if @created_package_class
+        @original_directory = Dir.pwd
+        @directory = Dir.mktmpdir('publish-multi-spec-')
+        %w[BTLogger BTLoggerConsole].each do |name|
+          File.write(File.join(@directory, "#{name}.podspec"), <<~SPEC)
+            Pod::Spec.new do |s|
+              s.name = '#{name}'
+              s.version = '2'
+              s.source = { :git => 'https://gitlab.example/ios_component/btlogger.git', :tag => s.version.to_s }
+            end
+          SPEC
+        end
+      end
+
+      after do
+        Command.send(:remove_const, :Package) if @created_package_class
+        Dir.chdir(@original_directory)
+        FileUtils.rm_rf(@directory)
+      end
+
+      it 'shows help without selecting a spec or entering the publish flow' do
+        command = Command.parse(%w[publish auto --help])
+        command.expects(:find_podspec_file).never
+        should.raise(SystemExit) { command.run }.status.should == 0
+      end
+
+      it 'uses the explicit podspec without asking for another selection' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=BTLoggerConsole.podspec'])
+        command.expects(:gets).never
+        command.send(:find_podspec_file).should == 'BTLoggerConsole.podspec'
+      end
+
+      it 'fails when wukong did not select a podspec in a multiple-spec directory' do
+        command = Command.parse(['publish', 'auto', @directory, '--from-wukong'])
+        command.expects(:gets).never
+        should.raise(Informative) { command.send(:find_podspec_file) }
+      end
+
+      it 'rejects an invalid explicit file and conflicting publication modes before packaging' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=Missing.podspec'])
+        should.raise(Informative) { command.send(:find_podspec_file) }
+        command = Command.parse(%w[publish auto --skip-source-publish --skip-framework-publish])
+        should.raise(Informative) { command.run }
+      end
+
+      it 'publishes only the selected binary and increments its version exactly once' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=BTLoggerConsole.podspec', '--skip-source-publish'])
+        package = stub('package', :run => nil)
+        publisher = stub('publisher', :run => nil)
+        Command::Package.expects(:new).with { |argv| argv.arguments == ['BTLoggerConsole.podspec'] }.returns(package)
+        Command::Publish.expects(:new).once.with { |argv|
+          argv.arguments == ['BaiTuFrameworkPods', 'BTLoggerConsole.podspec'] && argv.flag?('increase-version', true)
+        }.returns(publisher)
+        command.run
+      end
+
+      it 'forwards the same repository through packaging and both publication phases' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=BTLoggerConsole.podspec', '--shared-repository=btlogger'])
+        command.expects(:run_project_git!).with('remote', 'get-url', 'origin').returns('git@gitlab.example:ios_component/BTLogger.git')
+        package = stub('package', :run => nil)
+        publisher = stub('publisher', :run => nil)
+        Command::Package.expects(:new).with { |argv|
+          argv.arguments == ['BTLoggerConsole.podspec'] && argv.option('shared-repository') == 'btlogger'
+        }.returns(package)
+        order = sequence('shared source then binary')
+        Command::Publish.expects(:new).with { |argv|
+          argv.arguments == ['BaiTuPods', 'BTLoggerConsole.podspec'] && argv.option('shared-repository') == 'btlogger'
+        }.in_sequence(order).returns(publisher)
+        Command::Publish.expects(:new).with { |argv|
+          argv.arguments == ['BaiTuFrameworkPods', 'BTLoggerConsole.podspec'] && argv.option('shared-repository') == 'btlogger'
+        }.in_sequence(order).returns(publisher)
+        command.run
+      end
+
+      it 'rejects another source repository before packaging or creating any remote repository' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=BTLoggerConsole.podspec', '--shared-repository=btlogger'])
+        command.expects(:run_project_git!).with('remote', 'get-url', 'origin').returns('git@gitlab.example:other/btlogger.git')
+        Command::Package.expects(:new).never
+        Command::Publish.expects(:new).never
+        should.raise(Informative) { command.run }
+      end
+
+      it 'publishes source specs with component-scoped tags and preserves the editable template' do
+        file = File.join(@directory, 'BTLoggerConsole.podspec')
+        original = File.read(file)
+        command = Command::Publish.allocate
+        spec = Specification.from_file(file)
+        command.instance_variable_set(:@spec, spec)
+        command.instance_variable_set(:@name, file)
+        command.instance_variable_set(:@shared_repository, 'btlogger')
+        command.instance_variable_set(:@new_version, '2')
+        command.instance_variable_set(:@source, 'BaiTuPods')
+        command.instance_variable_set(:@sources, ['trunk'])
+        command.instance_variable_set(:@work_dir, @directory)
+        command.send(:source_release_tag).should == 'BTLoggerConsole-2'
+        command.expects(:project_id).never
+        command.send(:check_remote_repo)
+        generated = file + '.json'
+        publisher = stub('source publisher', :run => nil)
+        Command::Repo::Push::PushWithoutValid.expects(:new).with { |argv|
+          metadata = JSON.parse(File.read(argv.arguments[1]))
+          argv.arguments == ['BaiTuPods', generated] &&
+            metadata['source'] == { 'git' => 'https://gitlab.example/ios_component/btlogger.git', 'tag' => 'BTLoggerConsole-2' }
+        }.returns(publisher)
+        command.send(:push_pods)
+        File.read(file).should == original
+        File.exist?(generated).should == false
+        command.instance_variable_set(:@shared_repository, nil)
+        command.send(:source_release_tag).should == '2'
+      end
+
+      it 'finds both component artifacts in the shared binary repository' do
+        %w[BTLogger BTLoggerConsole].each do |name|
+          command = Command::Publish.allocate
+          command.instance_variable_set(:@spec, Struct.new(:name).new(name))
+          command.instance_variable_set(:@shared_repository, 'btlogger')
+          command.expects(:send_request).with(Command::Publish::GET, '/groups/27/projects', { :search => 'btlogger' }).returns([
+                                                                                                                                 { 'name' => 'BTLogger', 'path' => 'btlogger', 'id' => 52 },
+                                                                                                                               ])
+          command.send(:get_project_id).should == 52
+        end
+      end
+
+      it 'keeps the source then binary sequence for existing combined releases' do
+        command = Command.parse(['publish', 'auto', @directory, '--podspec=BTLogger.podspec', '--skip-package'])
+        publisher = stub('publisher', :run => nil)
+        order = sequence('source then binary')
+        Command::Publish.expects(:new).with { |argv| argv.arguments == ['BaiTuPods', 'BTLogger.podspec'] }.in_sequence(order).returns(publisher)
+        Command::Publish.expects(:new).with { |argv|
+          argv.arguments == ['BaiTuFrameworkPods', 'BTLogger.podspec'] && !argv.flag?('increase-version', true)
+        }.in_sequence(order).returns(publisher)
+        command.run
       end
     end
 

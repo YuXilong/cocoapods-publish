@@ -17,6 +17,9 @@ module Pod
       # 检查仓库状态 没有就创建一个新的仓库
       def check_remote_repo
         puts '-> 正在检查远程仓库状态...'.yellow unless @from_wukong
+        # 共用模式只使用已校验的 origin，不按组件名新建或重绑源码仓库。
+        return if @shared_repository
+
         project_id
       end
 
@@ -70,11 +73,12 @@ module Pod
 
       def get_project_id
         # 固定BTAssets版本号
-        return 913 if @spec.name == 'BTAssets'
+        return 913 if @spec.name == 'BTAssets' && !@shared_repository
 
         puts "-> 正在获取项目ID: #{@spec.name}...".yellow unless @from_wukong
+        repository = @shared_repository || @spec.name
         params = {
-          'search': @spec.name
+          'search': repository
         }
         response = send_request(GET, '/groups/27/projects', params)
         if response.nil?
@@ -82,7 +86,7 @@ module Pod
           clean
           Process.exit(1)
         end
-        projects = response.to_a.select { |p| p['name'] == @spec.name }
+        projects = response.to_a.select { |p| p['name'].to_s.casecmp?(repository) || p['path'].to_s.casecmp?(repository) }
         unless projects.empty?
           puts '-> 获取项目ID成功！'.green unless @from_wukong
           return projects[0]['id']

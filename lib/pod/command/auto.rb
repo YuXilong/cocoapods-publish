@@ -11,6 +11,9 @@ module Pod
 
         def self.options
           [
+            %w[--shared-repository=NAME 多规格共用当前源码仓库和指定名称的二进制仓库],
+            %w[--podspec=FILE 指定当前目录的podspec，整条发布链路使用同一文件],
+            %w[--skip-source-publish 仅发布二进制，跳过源码建仓、Specs和标签发布],
             %w[--local 指定使用本地版本构建二进制.],
             %w[--lib-lint lib验证.],
             %w[--skip-package 跳过制作二进制.],
@@ -32,6 +35,9 @@ module Pod
 
         def initialize(argv)
           @podspec_root = argv.shift_argument
+          @selected_podspec = argv.option('podspec')
+          @shared_repository_auto = argv.option('shared-repository')
+          @skip_source_publish_auto = argv.flag?('skip-source-publish', false)
           @local = argv.flag?('local', true)
           @lib_lint = argv.flag?('lib-lint', false)
           @skip_package = argv.flag?('skip-package', false)
@@ -76,11 +82,23 @@ module Pod
           @debug = debug
         end
 
-        def validate!; end
+        def validate!
+          # auto 不使用父类的仓库/规格位置参数，但仍需处理 --help 和未知选项。
+          Command.instance_method(:validate!).bind(self).call
+          if @skip_source_publish_auto && @skip_framework_publish_auto
+            raise Informative, '不能同时跳过源码和二进制发布'
+          end
+        end
 
         def run
+          validate!
           @podspec_root ||= Dir.pwd
           @podspec = find_podspec_file
+          if @shared_repository_auto
+            @shared_repository = @shared_repository_auto
+            @name = @podspec
+            validate_shared_repository!
+          end
           @is_assets_framework = @podspec.include?('BTAssets.podspec')
 
           if @beta_version_auto && get_current_branch == 'main'
@@ -97,6 +115,7 @@ module Pod
             end
 
             args = [@podspec]
+            args.push("--shared-repository=#{@shared_repository_auto}") if @shared_repository_auto
             args.push('--continue-from-upload') if @continue_from_upload_auto
             args.push('--local', '--no-show-tips') if @local
             args.push('--clean-cache') if @clean_cache
@@ -121,6 +140,7 @@ module Pod
               puts '-> 正在生成二进制...'.yellow unless @from_wukong
 
               args = [@podspec]
+              args.push("--shared-repository=#{@shared_repository_auto}") if @shared_repository_auto
               args.push('--local', '--no-show-tips') if @local
               args.push('--clean-cache') if @clean_cache
               args.push('--debug') if @debug
@@ -145,7 +165,7 @@ module Pod
 
           # BTAssets不发布源码版本
           should_increase_version = true
-          if !@beta_version_auto && !@is_assets_framework
+          if !@skip_source_publish_auto && !@beta_version_auto && !@is_assets_framework
             # 发布源码
             begin_time = (Time.now.to_f * 1000).to_i
             if @from_wukong
@@ -154,6 +174,7 @@ module Pod
               puts '-> 正在发布到源码私有库...'.yellow
             end
             params = @lib_lint ? ['BaiTuPods', @podspec] : ['BaiTuPods', @podspec, '--skip-lib-lint']
+            params << "--shared-repository=#{@shared_repository_auto}" if @shared_repository_auto
             params << '--from-wukong' if @from_wukong
             params << '--debug' if @debug
             params << "--new-class-prefixes=#{@auto_new_class_prefixes}"
@@ -199,6 +220,7 @@ module Pod
 
         def framework_publish_arguments(should_increase_version)
           params = ['BaiTuFrameworkPods', @podspec]
+          params << "--shared-repository=#{@shared_repository_auto}" if @shared_repository_auto
           params << '--from-wukong' if @from_wukong
           params << '--debug' if @debug
           params << '--beta' if @beta_version_auto
@@ -220,7 +242,23 @@ module Pod
 
         # 自动查找当前目前的podspec文件
         def find_podspec_file
+          # 保留历史目录参数，同时支持帮助中声明的 podspec 文件参数。
+          if File.file?(@podspec_root)
+            raise Informative, 'podspec 不能同时通过位置参数和 --podspec 指定' if @selected_podspec
+
+            @selected_podspec = File.expand_path(@podspec_root)
+            @podspec_root = File.dirname(@selected_podspec)
+          end
           Dir.chdir(@podspec_root)
+          if @selected_podspec
+            selected = File.expand_path(@selected_podspec)
+            unless File.file?(selected) && File.extname(selected) == '.podspec' &&
+                   File.dirname(File.realpath(selected)) == File.realpath(Dir.pwd)
+              raise Informative, '指定的 podspec 必须是当前目录中的有效文件'
+            end
+
+            return File.basename(selected)
+          end
           files = []
           Dir.glob('*.podspec')
              .each { |path| files << path }
@@ -232,11 +270,12 @@ module Pod
 
           index = 1
           if files.count > 1
+            raise Informative, '多个 podspec，请由 wukong 通过 --podspec 指定' if @from_wukong
             puts '-> 发现多个podspec配置文件，请选择一个：'.green
             files.each_with_index do |f, i|
               puts "-> #{i + 1}.#{f}".green
             end
-            index = gets.chomp.to_i
+            index = gets.to_s.strip.to_i
 
             unless (1...files.count + 1).include?(index)
               puts '-> 输入不正确，请重试！'.red

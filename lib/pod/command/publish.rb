@@ -21,6 +21,7 @@ module Pod
 
       def self.options
         [
+          %w[--shared-repository=NAME 共用源码仓库和二进制仓库，源码标签按组件区分],
           %w[--skip-import-validation 跳过import_validation验证.],
           %w[--skip-lib-lint 跳过lib验证.],
           %w[--sources 指定依赖的组件仓库.],
@@ -38,6 +39,7 @@ module Pod
       def initialize(argv)
         @source = argv.shift_argument
         @name = argv.shift_argument
+        @shared_repository = argv.option('shared-repository')
         @skip_import_validation = argv.flag?('skip-import-validation', false)
         @skip_lib_lint = argv.flag?('skip-lib-lint', false)
         @sources = argv.option('sources', 'trunk,BaiTuPods,BaiTuFrameworkPods').split(',')
@@ -116,6 +118,7 @@ module Pod
           # 'ZSL' => 'jolly',
           # 'PPL' => 'poppolite'
         }
+        validate_shared_repository! if @shared_repository
         @current_branch = get_current_branch.upcase
         @pod_name = @spec.name
 
@@ -463,7 +466,8 @@ module Pod
         content.gsub!(/\n{2,}/, "\n\n")
         content.gsub!('    ', '  ')
         content.gsub!('s.vendored_frameworks', '  s.vendored_frameworks')
-        content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://#{host}/ios_framework/\#{s.name.to_s}.git\"")
+        homepage_repository = @shared_repository || '#{s.name.to_s}'
+        content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://#{host}/ios_framework/#{homepage_repository}.git\"")
         content = remove_legacy_architecture_overrides(content)
         File.open(@push_podspec_file, 'w') { |file| file.puts content.strip }
       end
@@ -681,8 +685,44 @@ module Pod
       end
 
       def check_tag
-        output = `cd #{@project_path} && git tag -l #{@new_version}`.lines.to_a
+        output = run_project_git!('tag', '-l', source_release_tag).lines.to_a
         output.empty?
+      end
+
+      # 单组件保留历史纯版本标签；同仓库多组件使用独立标签，避免相互覆盖。
+      def source_release_tag
+        @shared_repository ? "#{@spec.name}-#{@new_version}" : @new_version
+      end
+
+      # 环境开关可能被打包阶段修改，源规格始终按源码模式求值。
+      def source_specification
+        previous = ENV.delete('USE_FRAMEWORK')
+        Specification.from_file(@name)
+      ensure
+        ENV['USE_FRAMEWORK'] = previous
+      end
+
+      def validate_shared_repository!
+        unless @shared_repository.match?(/\A[a-zA-Z0-9][a-zA-Z0-9_.-]*\z/)
+          raise Informative, '共用仓库名称无效'
+        end
+
+        origin = git_repository_identity(run_project_git!('remote', 'get-url', 'origin').strip)
+        source = git_repository_identity(source_specification.source[:git].to_s)
+        unless source == origin && origin.last.split('/').last.casecmp?(@shared_repository)
+          raise Informative, '所选 podspec、共用仓库名称与当前源码仓库 origin 不一致'
+        end
+      end
+
+      def git_repository_identity(remote)
+        value = remote.include?('://') ? remote : remote.sub(/\A([^:]+):/, 'ssh://\1/')
+        uri = URI(value)
+        path = uri.path.to_s.sub(%r{/\z}, '').sub(/\.git\z/, '').sub(%r{\A/}, '')
+        raise Informative, '源码 Git 地址无效' if uri.host.to_s.empty? || path.empty?
+
+        [uri.host.downcase, path.downcase]
+      rescue URI::InvalidURIError
+        raise Informative, '源码 Git 地址无效'
       end
 
       # 创建tag
@@ -693,7 +733,7 @@ module Pod
         config.silent = !@debug
         begin
           commit_and_push_component_repository!(@new_version, branch)
-          recreate_and_push_component_tag!(@new_version)
+          recreate_and_push_component_tag!(source_release_tag)
         rescue ::StandardError => e
           config.silent = false
           UI.puts "-> 创建新版本失败：#{e.message}".red
@@ -824,7 +864,14 @@ module Pod
       def push_pods
         UI.puts "-> 发布新版本(#{@new_version})...".yellow unless @from_wukong
         config.silent = !@debug
-        argv = CLAide::ARGV.coerce([@source, @name, '--allow-warnings', "--sources=#{@sources.join(',')}"])
+        spec_file = @name
+        if @shared_repository
+          spec = source_specification
+          spec.source = { :git => spec.source[:git], :tag => source_release_tag }
+          spec_file = File.join(@work_dir, "#{spec.name}.podspec.json")
+          File.write(spec_file, spec.to_pretty_json)
+        end
+        argv = CLAide::ARGV.coerce([@source, spec_file, '--allow-warnings', "--sources=#{@sources.join(',')}"])
         begin
           command = Repo::Push::PushWithoutValid.new(argv)
           command.run
@@ -837,6 +884,8 @@ module Pod
           UI.puts "-> #{e}".red
           UI.puts "-> (#{@new_version})发布失败！".red
           Process.exit(1)
+        ensure
+          FileUtils.rm_f(spec_file) if spec_file != @name
         end
       end
 
