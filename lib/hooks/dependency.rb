@@ -25,6 +25,11 @@ module Pod
     def initialize(name = nil, *requirements)
       return origin_initialize(name, *requirements) if name.nil? || name.empty?
 
+      # CocoaPods 用 Version 对象生成组件内部的 subspec 约束；候选版本检查不能污染全局版本缓存。
+      if name.include?('/') && requirements.one? && requirements.first.is_a?(Version)
+        return origin_initialize(name, *requirements)
+      end
+
       base_name = name.split('/').first
       local_path = local_path_requirement?(requirements)
       if !local_path && Dependency.source_dependency.key?(base_name)

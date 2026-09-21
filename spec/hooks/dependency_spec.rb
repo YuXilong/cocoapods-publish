@@ -124,6 +124,59 @@ module Pod
       Dependency.new(fw, '130').requirement.as_list.should == ["= 130.swift-#{Dependency::SWIFT_VERSION}"]
     end
 
+    it 'keeps the latest version across warmup and mixup resolutions after inspecting old subspecs' do
+      fw = 'BTAssetsSequentialResolution'
+      write_framework_podspec(fw, '353', swift_version: Dependency::SWIFT_VERSION)
+      write_framework_podspec(fw, '363')
+      write_framework_podspec(fw, '140.ZSL')
+      specs = %w[140.ZSL 363].map do |version|
+        Specification.from_file(File.join(@tmp_dir, 'BaiTuFrameworkPods', fw, version, "#{fw}.podspec"))
+      end
+      specs.first.subspec('ZSL') { |subspec| subspec.source_files = 'Sources/**/*' }
+
+      %w[Warmup Mixup].each do |name|
+        parent = Specification.new do |spec|
+          spec.name = name
+          spec.version = '1'
+          spec.ios.deployment_target = '13.0'
+          spec.dependency fw
+        end
+        podfile = Podfile.new do
+          platform :ios, '15.1'
+          pod name
+        end
+        resolver = Resolver.new(nil, podfile, Molinillo::DependencyGraph.new, [], false)
+        resolver.define_singleton_method(:search_for) do |dependency|
+          candidates = dependency.root_name == fw ? specs : [parent]
+          candidates.filter_map do |spec|
+            next unless dependency.requirement.satisfied_by?(spec.version)
+
+            spec.subspec_by_name(dependency.name, false)
+          end
+        end
+
+        resolved = resolver.resolve.values.flatten.map(&:spec).find { |spec| spec.name == fw }
+        resolved.version.to_s.should == '363'
+      end
+      Dependency.modified_frameworks.should.not.key?(fw)
+      Dependency.specified_framework_versions.should.not.key?(fw)
+    end
+
+    it 'preserves internal subspec versions while honoring an explicit legacy-compatible pin' do
+      fw = 'BTSubspecVersionIsolation'
+      write_framework_podspec(fw, '353', swift_version: Dependency::SWIFT_VERSION)
+      write_framework_podspec(fw, '363')
+      write_framework_podspec(fw, '140.ZSL')
+      pinned_version = "353.swift-#{Dependency::SWIFT_VERSION}"
+
+      explicit = Dependency.new("#{fw}/ZSL", '353')
+      internal = Dependency.new("#{fw}/ZSL", Version.new('140.ZSL'))
+
+      explicit.requirement.as_list.should == ["= #{pinned_version}"]
+      internal.requirement.as_list.should == ['= 140.ZSL']
+      Dependency.new(fw, []).requirement.as_list.should == ["= #{pinned_version}"]
+    end
+
     it 'preserves automatic legacy and beta selection when the selected artifact is not a stable release' do
       legacy = 'BTLegacyAutoSelection'
       write_framework_podspec(legacy, '130', swift_version: Dependency::SWIFT_VERSION)
