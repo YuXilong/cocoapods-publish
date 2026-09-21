@@ -85,7 +85,7 @@ module Pod
       Pod::Config.instance.stubs(:lockfile_path).returns(Pathname(lockfile))
     end
 
-    def write_local_pod(name, version, dependencies = {}, subspecs = [])
+    def write_local_pod(name, version, dependencies = {}, subspecs = [], ios: nil)
       pod_dir = File.join(@tmp_dir, name)
       FileUtils.mkdir_p(pod_dir)
       dependency_lines = dependencies.map do |dependency_name, dependency_version|
@@ -108,6 +108,7 @@ module Pod
         Pod::Spec.new do |s|
           s.name = '#{name}'
           s.version = '#{version}'
+        #{"  s.ios.deployment_target = '#{ios}'" if ios}
           s.summary = '#{name} test fixture'
           s.homepage = 'https://example.com/#{name}'
           s.license = { :type => 'MIT' }
@@ -118,6 +119,27 @@ module Pod
         end
       PODSPEC
       pod_dir
+    end
+
+    it 'resolves an iOS 15 dependency from an iOS 13 packager Podfile before post_install' do
+      logger_path = write_local_pod('BTLogger', '134', {}, [], ios: '15.0')
+      recorder_path = write_local_pod('BTRecorder', '1', { 'BTLogger' => '134' }, [], ios: '13.0')
+      podfile = Podfile.new(Pathname(File.join(@tmp_dir, 'Podfile'))) do
+        install! 'cocoapods', :integrate_targets => false
+        platform :ios, '13.0'
+        target 'Packager' do
+          pod 'BTRecorder', :path => recorder_path
+          pod 'BTLogger', :path => logger_path
+        end
+      end
+      sandbox = Sandbox.new(Pathname(File.join(@tmp_dir, 'Pods')))
+      sandbox.prepare
+      installer = Installer.new(sandbox, podfile)
+
+      installer.resolve_dependencies
+
+      podfile.target_definitions['Packager'].platform.deployment_target.to_s.should == '15.1'
+      installer.analysis_result.specifications.find { |spec| spec.name == 'BTLogger' }.version.to_s.should == '134'
     end
 
     it 'keeps a lockfile containing only module-stable versions' do
@@ -296,12 +318,12 @@ module Pod
       spec = Struct.new(:root, :name, :version)
       target_definition = Object.new
       target_definition.instance_variable_set(:@internal_hash, { 'dependencies' => [] })
-      analysis_result = Struct.new(:specs_by_target).new(
+      analysis_result = Struct.new(:specs_by_target).new({
         target_definition => [
           spec.new(texture_root, 'Texture/Core', Pod::Version.new('3.1.0')),
           spec.new(yyimage_root, 'YYImage/WebP', Pod::Version.new('1.0.4')),
         ]
-      )
+      })
       @installer.instance_variable_set(
         :@sandbox,
         Struct.new(:root, :development_pods).new(Pathname(@tmp_dir), {})
