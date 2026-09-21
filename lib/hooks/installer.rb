@@ -54,6 +54,7 @@ module Pod
       $VERBOSE = nil
 
       apply_local_podfile if local_podfile_path.exist?
+      @podfile&.normalize_ios_deployment_targets!
       rebuild_local_path_dependencies
 
       analyzer = origin_resolve_dependencies

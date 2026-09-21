@@ -113,6 +113,28 @@ module Pod
       @dependency.genrate_requirements(fw, ['100']).should.equal '100'
     end
 
+    it 'does not pin an unversioned dependency to a stable release because legacy artifacts exist' do
+      fw = 'BTDeploymentTargetRegression'
+      write_framework_podspec(fw, '130', swift_version: Dependency::SWIFT_VERSION)
+      write_framework_podspec(fw, '133')
+      write_framework_podspec(fw, '134')
+
+      Dependency.new(fw, []).requirement.should == Requirement.default
+      Dependency.modified_frameworks.should.not.key?(fw)
+      Dependency.new(fw, '130').requirement.as_list.should == ["= 130.swift-#{Dependency::SWIFT_VERSION}"]
+    end
+
+    it 'preserves automatic legacy and beta selection when the selected artifact is not a stable release' do
+      legacy = 'BTLegacyAutoSelection'
+      write_framework_podspec(legacy, '130', swift_version: Dependency::SWIFT_VERSION)
+      Dependency.new(legacy, []).requirement.as_list.should == ["= 130.swift-#{Dependency::SWIFT_VERSION}"]
+
+      beta = 'BTBetaAutoSelection'
+      write_framework_podspec(beta, '130', swift_version: Dependency::SWIFT_VERSION)
+      write_framework_podspec(beta, '131.b1')
+      Dependency.new(beta, []).requirement.as_list.should == ['= 131.b1']
+    end
+
     it 'maps an explicitly requested legacy compiler version to the stable artifact' do
       fw = 'BTExplicitLegacyRequirement'
       write_framework_podspec(fw, '100')

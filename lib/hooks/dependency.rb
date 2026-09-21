@@ -103,6 +103,9 @@ module Pod
 
       return version if version.is_a?(Array)
 
+      # 纯数字版本由 CocoaPods 按平台和完整依赖图选择，不因历史 Swift 产物强制锁定最新版。
+      return [] if requirements == [[]] && version.to_s.match?(/\A\d+(?:\.\d+)*\z/)
+
       version = compatible_framework_version(name, version.to_s)
 
       # 存储自动指定的版本号
