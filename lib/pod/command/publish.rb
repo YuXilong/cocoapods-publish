@@ -112,6 +112,7 @@ module Pod
         @scheme_map = {
           'PLA' => 'poppo',
           'VO' => 'vone',
+          'DRL' => 'dora',
           # 'MNL' => 'mimi',
           # 'MTI' => 'miti',
           # 'MIU' => 'miu',
