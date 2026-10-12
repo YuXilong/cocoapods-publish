@@ -3,3 +3,4 @@ pkg/
 *.gem
 .idea/
 .omx/
+/.jenkins-output/

@@ -1,0 +1,67 @@
+pipeline {
+    agent { label 'local-release' }
+    options {
+        disableConcurrentBuilds()
+        skipDefaultCheckout()
+        timestamps()
+        timeout(time: 45, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '3'))
+    }
+    triggers { pollSCM('H/5 * * * *') }
+    parameters {
+        choice(name: 'VERSION_BUMP', choices: ['patch', 'minor', 'major'], description: '版本递增类型')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: '只构建，不提交版本、不上传、不通知')
+    }
+    environment {
+        PATH = "/usr/local/opt/ruby/bin:/usr/local/bin:/opt/homebrew/opt/ruby@3.3/bin:/opt/homebrew/bin:${env.PATH}"
+        GITHUB_REPOSITORY = 'YuXilong/cocoapods-publish'
+        PRODUCT_NAME = 'cocoapods-publish'
+        RELEASE_KIND = '预发布'
+        UPGRADE_COMMAND = 'wukong update --pod-plugins'
+        DELIVERY_LABEL = '固定资产桶'
+        DELIVERY_RESULT = 'success'
+        JENKINS_RESULT = 'success'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'ruby -e \'abort "Ruby >= 3 required" if RUBY_VERSION.to_i < 3\''
+            }
+        }
+        stage('Check notification credential') {
+            when { expression { !params.DRY_RUN } }
+            steps {
+                withCredentials([string(credentialsId: 'lark-release-webhook', variable: 'LARK_WEBHOOK_URL')]) {
+                    sh 'test -n "$LARK_WEBHOOK_URL"'
+                }
+            }
+        }
+        stage('Build and release') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'github-release', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    sh 'bash .jenkins/release.sh'
+                }
+                archiveArtifacts artifacts: '.jenkins-output/*.gem', fingerprint: true
+                script { env.VERSION = readFile('.jenkins-output/version').trim() }
+            }
+        }
+        stage('Update toolchain') {
+            when { expression { !params.DRY_RUN } }
+            steps { build job: '更新构建工具链', wait: false }
+        }
+        stage('Notify Lark') {
+            when { expression { !params.DRY_RUN } }
+            steps {
+                withCredentials([
+                    usernamePassword(credentialsId: 'github-release', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN'),
+                    string(credentialsId: 'lark-release-webhook', variable: 'LARK_WEBHOOK_URL')
+                ]) {
+                    sh 'bash .github/scripts/notify-lark-release.sh'
+                }
+            }
+        }
+    }
+    post { always { sh 'rm -rf .jenkins-output/tmp' } }
+}
