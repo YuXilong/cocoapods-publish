@@ -438,9 +438,10 @@ module Pod
               }
         SPEC
 
-        framework_spec_contents = content.gsub(/\s{2}s\.subspec 'CoreFramework[\w\W]*?\bend/).to_a
+        # 完整匹配名称，避免选中 subspec 切换后保留的 Core_Framework_1 / CoreFramework_1。
+        framework_spec_contents = content.gsub(/\s{2}s\.subspec 'CoreFramework'[\w\W]*?\bend/).to_a
         if framework_spec_contents.empty?
-          framework_spec_contents = content.gsub(/\s{2}s\.subspec 'Core_Framework[\w\W]*?\bend/).to_a
+          framework_spec_contents = content.gsub(/\s{2}s\.subspec 'Core_Framework'[\w\W]*?\bend/).to_a
           if framework_spec_contents.empty?
             puts "-> podspec配置不正确，请检查#{@name} CoreFramework字段。".red
             clean

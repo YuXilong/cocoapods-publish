@@ -298,6 +298,63 @@ module Pod
     end
 
 
+    describe 'framework subspec publication' do
+      before do
+        @directory = Dir.mktmpdir('publish-subspec-')
+        @podspec_path = File.join(@directory, 'MyKit.podspec')
+        @command = Command::Publish.allocate
+        @command.instance_variable_set(:@push_podspec_file, @podspec_path)
+        @command.instance_variable_set(:@spec, Spec.new { |s| s.name = 'MyKit' })
+        @command.instance_variable_set(:@new_spec_name, 'MyKit')
+        @command.instance_variable_set(:@new_version, '101.DRL-S')
+      end
+
+      after do
+        FileUtils.rm_rf(@directory)
+      end
+
+      %w[CoreFramework Core_Framework].each do |core_name|
+        [false, true].each do |drl|
+          it "preserves #{drl ? 'DRL' : 'Core'} dependencies and resources with #{core_name}" do
+            File.write(@podspec_path, <<~SPEC)
+              Pod::Spec.new do |s|
+                s.name = 'MyKit'
+                s.version = '101.DRL-S'
+                if use_framework
+                  s.source = { :http => 'https://example.com/MyKit.zip' }
+                end
+                s.subspec '#{core_name}' do |ss|
+                  ss.vendored_frameworks = 'MyKit.framework'
+                  ss.dependency 'VolcEngineRTC-VE/Core', '3.58.1.24200'
+                  ss.dependency 'VolcEngineRTC-VE/RealXBase', '3.58.1.24200'
+                  ss.dependency 'AgoraRtcEngine_Special_iOS', '4.5.3.4.WRHD'
+                end
+                s.subspec 'DRL_Framework' do |ss|
+                  ss.vendored_frameworks = 'MyKit.framework'
+                  ss.resources = 'BeautyRes.bundle'
+                  ss.dependency 'AgoraRtcEngine_Special_iOS', '4.5.3.4.WRHD'
+                end
+              end
+            SPEC
+            # 此处只验证 podspec 转换，产物完整性另有专门测试。
+            @command.stubs(:validate_artifact_manifest!)
+            @command.stubs(:get_project_id).returns(42)
+            @command.send(:save_new_default_subspec, 'DRL') if drl
+            @command.send(:modify_zip_path, 'repository/files/101',
+                          { 'artifact' => { 'path' => 'MyKit.xcframework' } })
+
+            published = Spec.from_file(@podspec_path)
+            expected = ['AgoraRtcEngine_Special_iOS']
+            expected += ['VolcEngineRTC-VE/Core', 'VolcEngineRTC-VE/RealXBase'] unless drl
+            published.dependencies.map(&:name).sort.should == expected.sort
+            published.attributes_hash['resources'].should == (drl ? 'BeautyRes.bundle' : nil)
+            published.attributes_hash['vendored_frameworks'].should == 'MyKit.xcframework'
+            published.subspecs.should.be.empty
+          end
+        end
+      end
+    end
+
     describe 'XCFramework artifact validation' do
       before do
         @command = Command::Publish.allocate
