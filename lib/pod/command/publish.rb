@@ -397,6 +397,9 @@ module Pod
 
       def save_new_default_subspec(subspec)
         content = File.read(@push_podspec_file)
+        # 未声明专用二进制子规格的旧组件继续使用 Core 配置。
+        return unless content.include?("s.subspec '#{subspec}_Framework'")
+
         old_subspec = 'Core_Framework'
         old_subspec = 'CoreFramework' unless content.include?("s.subspec 'Core_Framework'")
         # 替换组件default_subspec

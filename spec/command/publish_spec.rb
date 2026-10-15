@@ -314,6 +314,36 @@ module Pod
       end
 
       %w[CoreFramework Core_Framework].each do |core_name|
+        [nil, 'DRL_Framework_1'].each do |other_name|
+          it "keeps #{core_name} when DRL_Framework is absent (other: #{other_name.inspect})" do
+            content = <<~SPEC
+              Pod::Spec.new do |s|
+                s.name = 'MyKit'
+                s.version = '101.DRL-S'
+                s.subspec '#{core_name}' do |ss|
+                  ss.vendored_frameworks = 'MyKit.framework'
+                  ss.resources = 'MyKit.bundle'
+                  ss.dependency 'CoreDependency'
+                end
+              end
+            SPEC
+            content.sub!("  s.subspec '#{core_name}'", "  s.subspec '#{other_name}' do |ss|\n    ss.dependency 'OtherDependency'\n  end\n  s.subspec '#{core_name}'") if other_name
+            File.write(@podspec_path, content)
+            @command.send(:save_new_default_subspec, 'DRL')
+            File.read(@podspec_path).should == content
+
+            @command.stubs(:validate_artifact_manifest!)
+            @command.stubs(:get_project_id).returns(42)
+            @command.send(:modify_zip_path, 'repository/files/101',
+                          { 'artifact' => { 'path' => 'MyKit.xcframework' } })
+            published = Spec.from_file(@podspec_path)
+            published.dependencies.map(&:name).should == ['CoreDependency']
+            published.attributes_hash['resources'].should == 'MyKit.bundle'
+            published.attributes_hash['vendored_frameworks'].should == 'MyKit.xcframework'
+            published.subspecs.should.be.empty
+          end
+        end
+
         [false, true].each do |drl|
           it "preserves #{drl ? 'DRL' : 'Core'} dependencies and resources with #{core_name}" do
             File.write(@podspec_path, <<~SPEC)
