@@ -18,6 +18,18 @@
 
 未开启预检且 CocoaPods 只报告单个缺失版本时，错误信息会提示使用以上命令。
 
+### ReerCodable 源码组件
+
+使用 `BaiTu-iOS/baitu-specs` 中的 ReerCodable 规格时，源码组件只需正常声明依赖：
+
+```ruby
+s.dependency 'ReerCodable', '~> 1.8'
+```
+
+安装时插件自动沿依赖图配置宏加载参数，覆盖直接依赖、传递依赖，以及组件的 test_spec/app_spec target；保留已有 Swift 参数并按 Debug/Release 的实际依赖分别处理。无需组件或业务工程另写 `OTHER_SWIFT_FLAGS`、脚本或 `post_install`。
+
+项目仍使用现有的 `cocoapods-publish` 插件及 Specs 源。宏路径、版本和下载逻辑来自已安装的 ReerCodable 规格，插件不固定版本、不重复下载；未依赖 ReerCodable 的 Pod 和不含预编译宏配置的旧规格不受影响。当前预编译宏的 ARM Mac、Xcode 版本限制由 ReerCodable 规格决定。
+
 ### iOS 最低版本
 
 在解析依赖前，将 Podfile 中的 iOS 最低版本统一提升到 `15.1` 下限；`Podfile.local` 的覆盖先应用，声明更高版本的 target 保留原值，其他平台不调整。生成 Pods 工程时使用同一下限，不再只依赖 `post_install` 修正。packager 的普通构建和函数混淆缓存预热共用此安装入口。

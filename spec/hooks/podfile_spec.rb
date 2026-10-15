@@ -22,7 +22,7 @@ module Pod
       old_ios = project.new_target(:framework, 'OldIOS', :ios, '13.0')
       new_ios = project.new_target(:framework, 'NewIOS', :ios, '17.0')
       mac = project.new_target(:framework, 'Mac', :osx, '12.0')
-      installer = Struct.new(:generated_projects).new([project])
+      installer = Struct.new(:generated_projects, :target_installation_results).new([project], nil)
 
       Podfile.new.post_install!(installer)
 

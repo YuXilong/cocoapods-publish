@@ -1,3 +1,5 @@
+require 'cocoapods-publish/reer_codable_integration'
+
 module Pod
   # The Podfile is a specification that describes the dependencies of the
   # targets of an Xcode project.
@@ -59,7 +61,9 @@ module Pod
         end
       end
 
-      origin_post_install!(installer)
+      result = origin_post_install!(installer)
+      Publish::ReerCodableIntegration.apply(installer)
+      result
     end
   end
 
