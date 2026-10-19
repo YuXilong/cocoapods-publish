@@ -24,6 +24,14 @@ module Pod
       end
 
       def project_id
+        _, source_path = git_repository_identity(source_specification.source[:git].to_s)
+        if source_path.count('/') > 1
+          # 子群组按完整路径定位；失败时终止，避免在顶层误建同名仓库。
+          send_request(GET, "/projects/#{URI.encode_www_form_component(source_path)}")
+          puts '-> 获取项目ID成功！'.green unless @from_wukong
+          return
+        end
+
         params = {
           'search': @spec.name
         }

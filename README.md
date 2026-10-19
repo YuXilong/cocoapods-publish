@@ -10,6 +10,8 @@
 
     $ pod publish REPO_NAME POD_SPEC_FILE
 
+普通源码发布支持 podspec 的 `s.source[:git]` 使用多级 GitLab 子群组，例如 `https://gitlab-code.v.show/ios_component/Dora/Common/BTHttpClient.git`（也支持 SSH 地址）。子群组仓库须已存在且当前 token 有访问权限，按完整路径查询失败时终止，不会在顶层创建同名仓库。顶层源码仓库的自动创建、二进制仓库的查询和上传逻辑保持原有行为。
+
 ### 依赖版本预检
 
 默认的 `pod install` 不执行额外预检。需要一次性检查 Podfile 中所有找不到的直接依赖版本时执行：

@@ -102,6 +102,54 @@ module Pod
       end
     end
 
+    describe 'source repository lookup' do
+      before do
+        @command = Command::Publish.allocate
+        @command.instance_variable_set(:@from_wukong, true)
+        @command.instance_variable_set(:@spec, Struct.new(:name).new('BTHttpClient'))
+      end
+
+      it 'looks up nested source repositories by their complete path for HTTPS and SSH URLs' do
+        [
+          'https://gitlab-code.v.show/ios_component/Dora/Common/BTHttpClient',
+          'git@gitlab-code.v.show:ios_component/Dora/Common/BTHttpClient.git',
+          'ssh://git@gitlab-code.v.show:1022/ios_component/Dora/Common/BTHttpClient.git',
+        ].each do |remote|
+          @command.stubs(:source_specification).returns(Struct.new(:source).new({ :git => remote }))
+          @command.expects(:send_request).with(
+            Command::Publish::GET, '/projects/ios_component%2Fdora%2Fcommon%2Fbthttpclient'
+          ).returns({ 'id' => 42 })
+          @command.expects(:create_project).never
+
+          @command.check_remote_repo
+        end
+      end
+
+      it 'does not create a top-level repository if nested source lookup fails' do
+        @command.stubs(:source_specification).returns(Struct.new(:source).new({
+          :git => 'https://gitlab-code.v.show/ios_component/Dora/Common/BTHttpClient.git',
+        }))
+        @command.expects(:send_request).with(
+          Command::Publish::GET, '/projects/ios_component%2Fdora%2Fcommon%2Fbthttpclient'
+        ).raises(SystemExit.new(1))
+        @command.expects(:create_project).never
+
+        should.raise(SystemExit) { @command.check_remote_repo }.status.should == 1
+      end
+
+      it 'preserves automatic creation for top-level source repositories' do
+        @command.stubs(:source_specification).returns(Struct.new(:source).new({
+          :git => 'https://gitlab-code.v.show/ios_component/BTHttpClient.git',
+        }))
+        @command.expects(:send_request).with(
+          Command::Publish::GET, '/groups/26/projects', { :search => 'BTHttpClient' }
+        ).returns([])
+        @command.expects(:create_project)
+
+        @command.check_remote_repo
+      end
+    end
+
     describe 'multiple podspec publishing' do
       before do
         # 这里只验证命令转发；无需安装或调用真实 packager。
