@@ -4,6 +4,69 @@ require 'cocoapods-publish/binary_specification'
 require 'tmpdir'
 
 describe Pod::BinarySpecification do
+  [nil, '', 'zip_file_path = "repository/files/1"'].each do |legacy_path|
+    it "saves a publish copy without migrating the source podspec (legacy: #{legacy_path.inspect})" do
+      Dir.mktmpdir('publish-copy-', File.dirname(__FILE__)) do |directory|
+        source = File.join(directory, 'Room.podspec')
+        copy = File.join(directory, 'Room.publish.podspec')
+        content = <<~SPEC
+          Pod::Spec.new do |s|
+            s.name = 'Room'
+            s.version = '1'
+            s.ios.deployment_target = '13.0'
+            s.source = { :git => 'https://example.com/Room.git', :tag => s.version.to_s }
+            s.source_files = 'Classes/*.m'
+            s.dependency 'AFNetworking', '~> 4.0.1'
+          end
+        SPEC
+        unless legacy_path.nil?
+          content = "use_framework = false\n#{legacy_path}\n" + content
+          content.sub!("  s.source_files", <<~'SPEC'.lines.map { |line| "  #{line}" }.join + "  s.source_files")
+            if use_framework
+              s.source = { :http => "https://example.com/repository/files/#{s.name.to_s}-#{s.version.to_s}.zip/raw?ref=main", :type => 'zip' }
+            end
+            s.subspec 'CoreFramework' do |ss|
+              ss.vendored_frameworks = 'Room.framework'
+            end
+          SPEC
+        end
+        File.write(source, content)
+        command = Pod::Command::Publish.allocate
+        command.instance_variable_set(:@name, source)
+        command.instance_variable_set(:@push_podspec_file, copy)
+        command.instance_variable_set(:@old_version, '1')
+        command.instance_variable_set(:@new_version, '2.b1')
+        command.send(:save_new_version_to_podspec)
+        File.read(source).should == content
+        File.read(copy).should == content.sub("s.version = '1'", "s.version = '2.b1'")
+        Pod::Spec.from_file(copy).version.to_s.should == '2.b1'
+
+        command.instance_variable_set(:@spec, Pod::Spec.from_file(source))
+        command.instance_variable_set(:@new_spec_name, 'Room')
+        manifest = {
+          'component' => { 'name' => 'Room', 'version' => '2.b1' },
+          'artifact' => { 'path' => 'Room.framework', 'linkage' => 'static' },
+          'specification' => Pod::Spec.from_file(copy).to_hash,
+          'selected_specs' => ['Room'],
+          'module_name' => 'Room',
+          'vendored_frameworks' => [], 'resources' => [],
+        }
+        # 只隔离远端产物读取和校验，实际执行保存、路径选择及规格转换。
+        command.expects(:artifact_manifest_for_version).with('repository/files/2-beta', '2.b1').returns(manifest)
+        command.expects(:validate_artifact_zip_identity!).with(manifest, 'repository/files/2-beta', '2.b1')
+        command.stubs(:validate_artifact_manifest!)
+        command.stubs(:get_project_id).returns(42)
+        command.send(:update_zip_file_for_version, '2.b1')
+        binary = Pod::Spec.from_file(copy)
+        binary.source[:http].should.include('/api/v4/projects/42/repository/files/2-beta%2FRoom-2.b1.zip')
+        binary.consumer(:ios).vendored_frameworks.should == ['Room.framework']
+        binary.dependencies.map { |d| [d.name, d.requirement.to_s] }.should == [['AFNetworking', '~> 4.0.1']]
+        binary.subspecs.should.be.empty
+        File.read(source).should == content
+      end
+    end
+  end
+
   it 'updates source spec versions independently of alignment and quotes' do
     command = Pod::Command::Publish.allocate
     ["s.version = '1'", 's.version="1"', "  s.version          = '1'"].each do |declaration|

@@ -376,7 +376,6 @@ module Pod
         replace_spec_version!(text, @old_version, @new_version)
         File.open(@push_podspec_file, 'w') { |file| file.puts text }
         @push_spec = spec_with_path(@push_podspec_file)
-        check_pod_http_source_publish
       end
 
       def save_new_version_to_local_podspec
@@ -680,37 +679,6 @@ module Pod
       def emit_artifact_capability(manifest, output = STDOUT)
         output.puts "-> [WK_ARTIFACT] #{JSON.generate(artifact_capability_record(manifest))}"
         output.flush
-      end
-
-      # 适配新的文件保存路径
-      def check_pod_http_source_publish
-        content = File.open(@push_podspec_file).read.to_s
-        # 已添加subspec跳过
-        return if content.include?('zip_file_path = ')
-
-        zip_file_path = get_zip_path(@new_version)
-
-        zip_file_path = <<~CONTENT
-          zip_file_path = "#{zip_file_path}"
-            if use_framework
-        CONTENT
-        zip_file_path = zip_file_path.chomp
-        content.gsub!(%r{repository/files/#\{s.name.to_s\}-#\{s.version.to_s\}\.zip/raw\?ref=main",}, zip_file_path)
-
-        if content.include?("if ENV['")
-          content.gsub!(/# 以下为脚本依赖CoreFramework自动生成代码，勿动⚠️⚠️ 如CoreFramework有改动请删除。[\w\W]*?\bend[\w\W]*?end/, '')
-        else
-          content.gsub!(/# 以下为脚本依赖CoreFramework自动生成代码，勿动⚠️⚠️ 如CoreFramework有改动请删除。[\w\W]*?\bend/, '')
-        end
-
-        zip_file_path = <<~CONTENT
-          end
-
-            s.subspec
-        CONTENT
-        content.gsub!(/\bend\W*?\bs.subspec/, zip_file_path.chomp)
-
-        File.open(@name, 'w') { |fw| fw.write(content) }
       end
 
       # 检查当前仓库状态
