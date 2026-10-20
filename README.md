@@ -12,6 +12,12 @@
 
 普通源码发布支持 podspec 的 `s.source[:git]` 使用多级 GitLab 子群组，例如 `https://gitlab-code.v.show/ios_component/Dora/Common/BTHttpClient.git`（也支持 SSH 地址）。子群组仓库须已存在且当前 token 有访问权限，按完整路径查询失败时终止，不会在顶层创建同名仓库。顶层源码仓库的自动创建、二进制仓库的查询和上传逻辑保持原有行为。
 
+### 精简源码 podspec 的二进制发布
+
+不含 `CoreFramework` / `*_Framework` 二进制子规格的 podspec 可以只维护源码、资源、依赖及必要编译配置。二进制发布时从新版 packager 的 artifact manifest 读取实际构建规格、选中 subspec、模块名、动态依赖和资源，生成独立的二进制 podspec；不再要求手写 ZIP 地址或二进制 subspec。旧格式优先使用原转换流程；缺少主二进制子规格或历史别名与实际产物不匹配时，使用新版 packager 记录的实际构建元数据生成。旧 manifest 没有这些字段时仍明确报错，不能凭别名猜测主产物。
+
+精简格式必须重新打包以提供新增元数据；旧 manifest 不会被猜测补全。混淆变体使用各自构建后的组件名和资源名。源码编译声明及测试规格不会进入二进制规格，下载鉴权仍在读取 podspec 时从环境变量取得。包含自定义脚本或冲突配置时明确报错，需要先约定消费端行为。
+
 ### 依赖版本预检
 
 默认的 `pod install` 不执行额外预检。需要一次性检查 Podfile 中所有找不到的直接依赖版本时执行：

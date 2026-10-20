@@ -3,6 +3,7 @@
 require 'English'
 require 'base64'
 require 'cocoapods-publish/git_push_retry'
+require 'cocoapods-publish/binary_specification'
 require 'json'
 require 'open3'
 require 'pod/command/auto'
@@ -372,7 +373,7 @@ module Pod
       # 保存新版本
       def save_new_version_to_podspec
         text = File.read(@name)
-        text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{@new_version}'")
+        replace_spec_version!(text, @old_version, @new_version)
         File.open(@push_podspec_file, 'w') { |file| file.puts text }
         @push_spec = spec_with_path(@push_podspec_file)
         check_pod_http_source_publish
@@ -383,7 +384,7 @@ module Pod
         version = @version_number.to_s
         version = "#{@version_number}.b#{@beta_version_number}" if @beta_version_publish
         version = "#{version}.#{@current_branch}" if @is_version_need_attach_branch
-        text.gsub!("s.version          = '#{@old_version}'", "s.version          = '#{version}'")
+        replace_spec_version!(text, @old_version, version)
         File.open(@name, 'w') { |file| file.puts text }
       end
 
@@ -391,8 +392,14 @@ module Pod
       def restore_old_version_to_podspec
         text = File.read(@name)
         version = code_version
-        text.gsub!("s.version          = '#{version}'", "s.version          = '#{@old_version}'")
+        replace_spec_version!(text, version, @old_version)
         File.open(@name, 'w') { |file| file.puts text }
+      end
+
+      def replace_spec_version!(text, previous, version)
+        text.gsub!(/^([ \t]*s\.version\s*=\s*)(['"])#{Regexp.escape(previous.to_s)}\2/) do
+          "#{Regexp.last_match(1)}#{Regexp.last_match(2)}#{version}#{Regexp.last_match(2)}"
+        end
       end
 
       def save_new_default_subspec(subspec)
@@ -422,6 +429,10 @@ module Pod
       def modify_zip_path(zip_path, artifact_manifest = @artifact_manifest)
         validate_artifact_manifest!(artifact_manifest)
         content = File.open(@push_podspec_file).read
+        unless content.match?(/\.subspec\s*\(?\s*['"](?:CoreFramework(?:_\d+)?|\w*_Framework(?:_\d+)?)['"]/)
+          write_binary_specification(zip_path, artifact_manifest)
+          return
+        end
         content_lines = content.lines
         host = (ENV['GIT_LAB_HOST']).to_s.freeze
 
@@ -446,6 +457,10 @@ module Pod
         if framework_spec_contents.empty?
           framework_spec_contents = content.gsub(/\s{2}s\.subspec 'Core_Framework'[\w\W]*?\bend/).to_a
           if framework_spec_contents.empty?
+            if artifact_manifest['specification']
+              write_binary_specification(zip_path, artifact_manifest)
+              return
+            end
             puts "-> podspec配置不正确，请检查#{@name} CoreFramework字段。".red
             clean
             Process.exit(1)
@@ -454,13 +469,21 @@ module Pod
 
         framework_spec_content = framework_spec_contents.first.to_s
         new_framework_spec_content = framework_spec_content.gsub(@spec.name, @new_spec_name)
-        new_framework_spec_content.gsub!('ss.', 's.')
+        new_framework_spec_content.gsub!(/^([ \t]*)ss\./, '\1s.')
         new_framework_spec_content.gsub!(/s.subspec .*/, '')
         new_framework_spec_content.gsub!(/\s{2}end/, '')
-        new_framework_spec_content = rewrite_primary_framework_reference(
-          new_framework_spec_content,
-          artifact_manifest.fetch('artifact').fetch('path')
-        )
+        begin
+          new_framework_spec_content = rewrite_primary_framework_reference(
+            new_framework_spec_content,
+            artifact_manifest.fetch('artifact').fetch('path')
+          )
+        rescue Informative
+          # 历史别名无法可靠对应主产物时，使用本次实际构建的规格和资源。
+          raise unless artifact_manifest['specification']
+
+          write_binary_specification(zip_path, artifact_manifest)
+          return
+        end
 
         content.gsub!(/.*?(?=Pod::Spec\.new do \|s\|)/m, '')
         content.gsub!(/if use_framework.*?end/m, http_source.rstrip)
@@ -475,6 +498,12 @@ module Pod
         content.gsub!(/\s{2}s.homepage\s{5}=.*/, "  s.homepage     = \"https://#{host}/ios_framework/#{homepage_repository}.git\"")
         content = remove_legacy_architecture_overrides(content)
         File.open(@push_podspec_file, 'w') { |file| file.puts content.strip }
+      end
+
+      def write_binary_specification(zip_path, manifest)
+        url = "https://#{ENV['GIT_LAB_HOST']}/api/v4/projects/#{get_project_id}/#{zip_path}%2F#{@new_spec_name}-#{@new_version}.zip/raw?ref=main"
+        File.write(@push_podspec_file, BinarySpecification.new(manifest).render(url))
+        @push_spec = Specification.from_file(@push_podspec_file)
       end
 
       def artifact_manifest_for_version(zip_path, version)
