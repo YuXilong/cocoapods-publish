@@ -10,6 +10,20 @@
 
     $ pod publish REPO_NAME POD_SPEC_FILE
 
+## Development
+
+开发和回归测试需要 Ruby 3.1+、Bundler 2.5.23：
+
+```bash
+gem install bundler -v 2.5.23
+bundle install
+bundle exec rake specs
+```
+
+开发依赖使用 CocoaPods 1.16.2 系列和已修复安全漏洞的 ActiveSupport、addressable、concurrent-ruby、REXML；提交 `Gemfile.lock` 保持测试环境可复现。这些约束仅用于仓库开发环境，不修改发布 gem 的运行时依赖或 Ruby 版本声明。更新依赖后需运行完整回归，并用 `bundler-audit check --update` 检查锁文件。
+
+## 功能说明
+
 普通源码发布支持 podspec 的 `s.source[:git]` 使用多级 GitLab 子群组，例如 `https://gitlab-code.v.show/ios_component/Dora/Common/BTHttpClient.git`（也支持 SSH 地址）。子群组仓库须已存在且当前 token 有访问权限，按完整路径查询失败时终止，不会在顶层创建同名仓库。顶层源码仓库的自动创建、二进制仓库的查询和上传逻辑保持原有行为。
 
 ### 精简源码 podspec 的二进制发布
