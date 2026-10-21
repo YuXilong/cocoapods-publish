@@ -47,3 +47,17 @@ jobs:
       - name: Summary
         run: |
           echo "Published cocoapods-publish $(cat .jenkins-output/version)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Notify Lark
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LARK_WEBHOOK_URL: ${{ secrets.LARK_BOT_WEB_HOOK_URL }}
+          PRODUCT_NAME: cocoapods-publish
+          RELEASE_KIND: 预发布
+          UPGRADE_COMMAND: wukong update --pod-plugins
+          DELIVERY_LABEL: 固定资产桶
+          DELIVERY_RESULT: success
+          JENKINS_RESULT: not_applicable
+        run: |
+          VERSION="$(cat .jenkins-output/version)"
+          export VERSION
+          bash .github/scripts/notify-lark-release.sh

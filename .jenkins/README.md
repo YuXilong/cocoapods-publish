@@ -2,7 +2,7 @@
 
 公开仓库默认由 `.github/workflows/release.yml` 在 main 推送或手动触发时发版，使用 Ruby 3.3、Bundler 2.5.23。完整回归失败会阻止发布。版本提交包含 `[skip ci]`，避免重复触发。
 
-Actions 和 Jenkins 共用 `.jenkins/release.sh`：递增源码及锁文件版本、构建 gem、创建预发布存档、上传到 `v2.2.0` 固定资产桶，并清理桶内本插件旧 gem。Actions 不自动触发其他 Jenkins 任务或发送通知。
+Actions 和 Jenkins 共用 `.jenkins/release.sh`：递增源码及锁文件版本、构建 gem、创建预发布存档、上传到 `v2.2.0` 固定资产桶，并清理桶内本插件旧 gem。Actions 在发布成功后通过 `LARK_BOT_WEB_HOOK_URL` 发送 Lark 通知，不自动触发其他 Jenkins 任务。
 
 Jenkins 的 `release-cocoapods-publish` 保留为手动备用，关闭 SCM 轮询，默认 `DRY_RUN=true`。不要与 Actions 同时正式发布。验证构建不提交版本、不上传、不更新工具链、不通知。
 
