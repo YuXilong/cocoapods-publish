@@ -14,10 +14,8 @@ mkdir -p .jenkins-output/tmp
 export TMPDIR="$PWD/.jenkins-output/tmp"
 export COVERALLS_NO_POST=1
 bundle check || GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.version GIT_CONFIG_VALUE_0=HTTP/1.1 bundle install --retry 2
-# 保留原 Actions 的非阻断测试策略；失败仍记录在 Jenkins 日志中。
-if ! bundle exec rake specs; then
-  echo 'WARNING: 现有 specs 基线未通过，沿用原发布流程继续构建。' >&2
-fi
+# 回归失败时停止发版，避免发布未经验证的产物。
+bundle exec rake specs
 export GEM_NAME VERSION_FILE VERSION_BUMP
 ruby <<'RUBY'
 path = ENV.fetch('VERSION_FILE')
@@ -47,10 +45,10 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
-: "${GH_TOKEN:?Jenkins github-release credential required}"
+: "${GH_TOKEN:?GitHub release credential required}"
 git config credential.helper '!gh auth git-credential'
-git config user.name 'jenkins-release'
-git config user.email 'jenkins-release@users.noreply.github.com'
+git config user.name "${RELEASE_GIT_NAME:-jenkins-release}"
+git config user.email "${RELEASE_GIT_EMAIL:-jenkins-release@users.noreply.github.com}"
 git fetch origin main
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
   echo 'main 已更新，请重新运行发布。' >&2; exit 1;

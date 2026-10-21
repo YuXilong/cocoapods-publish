@@ -1,0 +1,48 @@
+# Created by yuxilong on 2026/10/21.
+name: Release cocoapods-publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: Version bump type
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+concurrency:
+  group: cocoapods-publish-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+          bundler-cache: true
+      - name: Test release safeguards
+        run: ruby .jenkins/test_release.rb
+      - name: Test, build and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_BUMP: ${{ inputs.version_bump || 'patch' }}
+          DRY_RUN: 'false'
+          RELEASE_GIT_NAME: github-actions[bot]
+          RELEASE_GIT_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: bash .jenkins/release.sh
+      - name: Summary
+        run: |
+          echo "Published cocoapods-publish $(cat .jenkins-output/version)" >> "$GITHUB_STEP_SUMMARY"

@@ -24,7 +24,7 @@ products.each do |product|
         git() { echo 'Unexpected git operation in DRY_RUN' >&2; exit 90; }
         gh() { echo 'Unexpected GitHub operation in DRY_RUN' >&2; exit 91; }
         rustup() { :; }
-        bundle() { :; }
+        bundle() { [[ "${FAIL_SPECS:-false}" != true || "$*" != "exec rake specs" ]]; }
         cargo() {
           mkdir -p target/aarch64-apple-darwin/release target/x86_64-apple-darwin/release wukong-server/target/aarch64-apple-darwin/release
           printf binary > target/aarch64-apple-darwin/release/wukong
@@ -35,8 +35,16 @@ products.each do |product|
         export -f git gh rustup cargo bundle gem
         bash "$RELEASE_SCRIPT"
       BASH
+      FileUtils.rm_rf(File.join(dir, '.jenkins-output'))
+      _, failed = Open3.capture2e(
+        { 'VERSION_BUMP' => bump, 'DRY_RUN' => 'true', 'RELEASE_SCRIPT' => script, 'FAIL_SPECS' => 'true' },
+        'bash', '-c', wrapper, chdir: dir
+      )
+      abort 'Released despite failing specs' if failed.success?
+      abort 'Changed version after failing specs' if File.exist?(File.join(dir, '.jenkins-output/version'))
+      # 重新执行成功分支以验证原有版本进位和产物检查。
       output, status = Open3.capture2e(
-        { 'PRODUCT' => product, 'VERSION_BUMP' => bump, 'DRY_RUN' => 'true', 'RELEASE_SCRIPT' => script },
+        { 'VERSION_BUMP' => bump, 'DRY_RUN' => 'true', 'RELEASE_SCRIPT' => script },
         'bash', '-c', wrapper, chdir: dir
       )
       abort output unless status.success?

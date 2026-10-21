@@ -7,13 +7,18 @@ pipeline {
         timeout(time: 45, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '3'))
     }
-    triggers { pollSCM('H/5 * * * *') }
     parameters {
         choice(name: 'VERSION_BUMP', choices: ['patch', 'minor', 'major'], description: '版本递增类型')
-        booleanParam(name: 'DRY_RUN', defaultValue: false, description: '只构建，不提交版本、不上传、不通知')
+        booleanParam(name: 'DRY_RUN', defaultValue: true, description: '只构建，不提交版本、不上传、不通知')
     }
     environment {
-        PATH = "/usr/local/opt/ruby/bin:/usr/local/bin:/opt/homebrew/opt/ruby@3.3/bin:/opt/homebrew/bin:${env.PATH}"
+        PATH = "/opt/homebrew/opt/ruby@3.3/bin:/usr/local/opt/ruby@3.3/bin:/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+        // 仅本任务使用隔离 gem 目录，避免改变其他 Jenkins 任务的工具链。
+        GEM_HOME = "${env.WORKSPACE}/.jenkins-output/bootstrap"
+        GEM_PATH = "${env.WORKSPACE}/.jenkins-output/bootstrap"
+        BUNDLE_PATH = "${env.WORKSPACE}/.jenkins-output/bundle"
+        BUNDLE_USER_HOME = "${env.WORKSPACE}/.jenkins-output/bundle-home"
+        BUNDLE_IGNORE_CONFIG = '1'
         GITHUB_REPOSITORY = 'YuXilong/cocoapods-publish'
         PRODUCT_NAME = 'cocoapods-publish'
         RELEASE_KIND = '预发布'
@@ -27,7 +32,10 @@ pipeline {
             steps {
                 deleteDir()
                 checkout scm
-                sh 'ruby -e \'abort "Ruby >= 3 required" if RUBY_VERSION.to_i < 3\''
+                sh '''
+                    ruby -e 'abort "Ruby >= 3.1 required" if Gem::Version.new(RUBY_VERSION) < Gem::Version.new("3.1")'
+                    gem install bundler -v 2.5.23 --no-document --clear-sources --source https://rubygems.org
+                '''
             }
         }
         stage('Check notification credential') {
@@ -41,7 +49,7 @@ pipeline {
         stage('Build and release') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-release', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-                    sh 'bash .jenkins/release.sh'
+                    sh 'export PATH="$GEM_HOME/bin:$PATH"; export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"; bash .jenkins/release.sh'
                 }
                 archiveArtifacts artifacts: '.jenkins-output/*.gem', fingerprint: true
                 script { env.VERSION = readFile('.jenkins-output/version').trim() }
