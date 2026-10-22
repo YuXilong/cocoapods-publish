@@ -116,13 +116,48 @@ describe Pod::BinarySpecification do
     result['version'].should == '2.VO-CF'
     result['vendored_frameworks'].should == %w[Room.xcframework Vendor.xcframework]
     result['resources'].should == ['Room.bundle']
-    result['dependencies'].should == { 'RootDep' => ['~> 2.0'], 'CoreDep' => ['= 3'] }
+    result['dependencies'].should == { 'RootDep' => ['~> 2.0'], 'CoreDep' => ['3'] }
     result['frameworks'].should == ['UIKit']
     %w[source_files subspecs test_specs default_subspecs resource_bundles].each do |key|
       result.key?(key).should == false
     end
     result['license'].should == { 'type' => 'MIT' }
     Pod::Spec.from_hash(result).test_specs.should.be.empty
+  end
+
+  it 'preserves raw constraints despite cached explicit Swift dependency versions' do
+    cache = Pod::Dependency.specified_framework_versions
+    previous = cache.dup
+    cache['BTLogger'] = '134'
+    Pod::Dependency.any_instance.stubs(:legacy_swift_framework?).with('BTLogger').returns(true)
+    @manifest['specification']['dependencies']['BTLogger'] = []
+    @manifest['specification']['dependencies']['CocoaMQTT'] = ['= 2.4.1']
+    original = Marshal.load(Marshal.dump(@manifest))
+
+    result = Pod::BinarySpecification.new(@manifest).attributes
+    result['dependencies']['BTLogger'].should == []
+    result['dependencies']['CocoaMQTT'].should == ['= 2.4.1']
+    @manifest.should == original
+    cache['BTLogger'].should == '134'
+  ensure
+    cache.replace(previous)
+  end
+
+  it 'merges raw root and selected subspec iOS constraints without other platforms' do
+    snapshot = @manifest['specification']
+    snapshot['dependencies']['Shared'] = ['>= 1']
+    snapshot['ios'] = { 'dependencies' => { 'Shared' => ['< 4'], 'IOSOnly' => [] } }
+    snapshot['osx'] = { 'dependencies' => { 'MacOnly' => [] } }
+    core = snapshot['subspecs'][0]
+    core['dependencies']['Shared'] = ['>= 1', '~> 2.0']
+    core['ios'] = { 'dependencies' => { 'Shared' => ['< 3'], 'Room/Resource' => [] } }
+    result = Pod::BinarySpecification.new(@manifest).attributes['dependencies']
+    result['Shared'].should == ['>= 1', '< 4', '~> 2.0', '< 3']
+    result['IOSOnly'].should == []
+    %w[MacOnly UnusedDep Room/Resource].each { |name| result.key?(name).should == false }
+
+    core['ios']['dependencies']['Room/Unused'] = []
+    should.raise(Pod::Informative) { Pod::BinarySpecification.new(@manifest).attributes }
   end
 
   it 'keeps runtime authentication out of generated text and resolves it when loaded' do
@@ -173,7 +208,7 @@ describe Pod::BinarySpecification do
         generated = Pod::Spec.from_file(path).to_hash
         generated['vendored_frameworks'].should == %w[Room.xcframework Vendor.xcframework]
         generated['resources'].should == ['Room.bundle']
-        generated['dependencies'].should == { 'RootDep' => ['~> 2.0'], 'CoreDep' => ['= 3'] }
+        generated['dependencies'].should == { 'RootDep' => ['~> 2.0'], 'CoreDep' => ['3'] }
       end
     end
   end

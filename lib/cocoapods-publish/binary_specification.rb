@@ -55,15 +55,17 @@ module Pod
 
       dependencies = {}
       specs.each do |spec|
-        spec.dependencies(:ios).each do |dependency|
-          if dependency.root_name == root.name
-            unless names.include?(dependency.name)
-              raise Informative, "内部依赖未参与构建：#{dependency.name}"
+        # 读取原始声明，避免 Dependency hook 将进程内版本缓存写入发布规格。
+        [spec.attributes_hash['dependencies'], spec.attributes_hash.dig('ios', 'dependencies')].compact.each do |declarations|
+          declarations.each do |name, requirements|
+            if name.split('/').first == root.name
+              unless names.include?(name)
+                raise Informative, "内部依赖未参与构建：#{name}"
+              end
+              next
             end
-            next
+            dependencies[name] = (Array(dependencies[name]) + Array(requirements)).uniq
           end
-          requirements = dependency.requirement.as_list
-          dependencies[dependency.name] = (Array(dependencies[dependency.name]) + requirements).uniq
         end
       end
       result['dependencies'] = dependencies unless dependencies.empty?
