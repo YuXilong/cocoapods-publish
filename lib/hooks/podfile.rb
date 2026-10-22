@@ -1,4 +1,4 @@
-require 'cocoapods-publish/reer_codable_integration'
+require 'cocoapods-publish/swift_macro_integration'
 
 module Pod
   # The Podfile is a specification that describes the dependencies of the
@@ -62,7 +62,7 @@ module Pod
       end
 
       result = origin_post_install!(installer)
-      Publish::ReerCodableIntegration.apply(installer)
+      Publish::SwiftMacroIntegration.apply(installer)
       result
     end
   end

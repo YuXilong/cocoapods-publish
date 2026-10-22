@@ -1,5 +1,7 @@
 # cocoapods-publish
 
+Swift 宏参数由 `SwiftMacroIntegration` 按依赖图自动传递，目前支持 ReerCodable 和 BTLogger。更新后的 BTLogger 源码规格可让 App 与业务 Pod 直接 `import BTLogger` 使用 `@Logger`，无需逐个添加编译参数；旧规格不受影响。BTLogger 二进制发布使用新版 packager 的 swift_macro_support 元数据，保留宏源码、宿主构建脚本及加载参数；包含旧 CoreFramework 的规格也走 manifest 生成，支持常规源码与二进制发布。旧 ZIP 需要重新打包。
+
 自动发布组件到私有组件仓库
 
 ## Installation

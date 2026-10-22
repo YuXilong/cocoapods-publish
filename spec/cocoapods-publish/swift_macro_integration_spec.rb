@@ -3,7 +3,7 @@ require File.expand_path('../../spec_helper', __FILE__)
 require 'tmpdir'
 
 module Pod
-  describe Publish::ReerCodableIntegration do
+  describe Publish::SwiftMacroIntegration do
     before do
       FileUtils.mkdir_p(ROOT + '.tmp')
       @directory = Dir.mktmpdir('macro-spec-', (ROOT + '.tmp').to_s)
@@ -46,7 +46,7 @@ module Pod
     def apply
       results = Struct.new(:pod_target_installation_results).new(@results)
       installer = Struct.new(:target_installation_results).new(results)
-      Publish::ReerCodableIntegration.apply(installer)
+      Publish::SwiftMacroIntegration.apply(installer)
     end
 
     it 'injects direct and transitive dependencies, preserving flags and avoiding duplicates' do
@@ -106,6 +106,35 @@ module Pod
       @reer.root_spec.pod_target_xcconfig = { 'OTHER_SWIFT_FLAGS' => @macro.sub('1.8.1', '1.9.0') }
       apply
       native.build_configurations.each { |c| c.build_settings['OTHER_SWIFT_FLAGS'].should.include?('/1.9.0/') }
+    end
+
+    it 'propagates BTLogger alongside ReerCodable through transitive dependencies' do
+      logger = make_target('BTLogger')
+      logger_macro = '-load-plugin-executable "${PODS_BUILD_DIR}/BTLoggerMacroPlugin/${CONFIGURATION}/BTLoggerMacroPlugin#BTLoggerMacroPlugin"'
+      logger.root_spec.pod_target_xcconfig = { 'OTHER_SWIFT_FLAGS' => logger_macro }
+      direct = make_target('Language')
+      direct.dependent_targets = [logger, @reer]
+      transitive = make_target('Feature')
+      transitive.dependent_targets = [direct]
+      natives = [install_target(direct).native_target, install_target(transitive).native_target]
+      apply
+      apply
+      natives.each do |native|
+        native.build_configurations.each do |config|
+          flags = config.build_settings['OTHER_SWIFT_FLAGS']
+          flags.scan(logger_macro).length.should == 1
+          flags.scan(@macro).length.should == 1
+        end
+      end
+    end
+
+    it 'does not inject BTLogger flags for old specs or unrelated dependencies' do
+      logger = make_target('BTLogger')
+      target = make_target('Feature')
+      target.dependent_targets = [logger]
+      native = install_target(target).native_target
+      apply
+      native.build_configurations.each { |c| c.build_settings.should.not.key?('OTHER_SWIFT_FLAGS') }
     end
 
     it 'runs after the user post_install callback without changing its return value' do

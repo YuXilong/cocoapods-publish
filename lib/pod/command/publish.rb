@@ -428,7 +428,7 @@ module Pod
       def modify_zip_path(zip_path, artifact_manifest = @artifact_manifest)
         validate_artifact_manifest!(artifact_manifest)
         content = File.open(@push_podspec_file).read
-        unless content.match?(/\.subspec\s*\(?\s*['"](?:CoreFramework(?:_\d+)?|\w*_Framework(?:_\d+)?)['"]/)
+        if artifact_manifest['swift_macro_support'] || !content.match?(/\.subspec\s*\(?\s*['"](?:CoreFramework(?:_\d+)?|\w*_Framework(?:_\d+)?)['"]/)
           write_binary_specification(zip_path, artifact_manifest)
           return
         end

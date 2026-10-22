@@ -1,7 +1,10 @@
 # Created by yuxilong on 2026/10/15.
 module Pod
   module Publish
-    module ReerCodableIntegration
+    module SwiftMacroIntegration
+      # 只传递已支持组件的宿主插件，不传播其余任意编译选项。
+      PLUGINS = { 'ReerCodable' => 'ReerCodableMacros', 'BTLogger' => 'BTLoggerMacroPlugin' }.freeze
+
       def self.apply(installer)
         results = installer.target_installation_results
         return unless results
@@ -21,23 +24,26 @@ module Pod
                              else
                                target.recursive_dependent_targets(:configuration => configuration)
                              end
-              dependency = dependencies.find { |pod| pod.root_spec.name == 'ReerCodable' }
-              next unless dependency
+              macros = dependencies.flat_map do |dependency|
+                plugin = PLUGINS[dependency.root_spec.name]
+                next [] unless plugin
 
-              # 使用已安装规格的路径和版本；旧版没有预编译宏配置时保持原行为。
-              flags = dependency.root_spec.consumer(dependency.platform).pod_target_xcconfig['OTHER_SWIFT_FLAGS'].to_s
-              macro = flags.scan(/-load-plugin-executable\s+(?:"[^"]+"|'[^']+'|\S+)/).find do |flag|
-                flag.match?(/#ReerCodableMacros["']?\z/)
+                # 使用已安装规格的路径；旧版没有宏配置时保持原行为。
+                flags = dependency.root_spec.consumer(dependency.platform).pod_target_xcconfig['OTHER_SWIFT_FLAGS'].to_s
+                flags.scan(/-load-plugin-executable\s+(?:"[^"]+"|'[^']+'|\S+)/).select do |flag|
+                  flag.match?(/\##{Regexp.escape(plugin)}["']?\z/)
+                end
               end
-              next unless macro
+              next if macros.empty?
 
               settings = config.build_settings
               current = Array(settings['OTHER_SWIFT_FLAGS']).join(' ')
-              next if current.include?(macro)
+              missing = macros.uniq.reject { |macro| current.include?(macro) }
+              next if missing.empty?
 
               # target 级设置不能遮盖 CocoaPods xcconfig 或使用方自己的编译参数。
               inherited = current.include?('$(inherited)') || current.include?('${inherited}')
-              settings['OTHER_SWIFT_FLAGS'] = [inherited ? nil : '$(inherited)', current, macro].compact.reject(&:empty?).join(' ')
+              settings['OTHER_SWIFT_FLAGS'] = [inherited ? nil : '$(inherited)', current, *missing].compact.reject(&:empty?).join(' ')
             end
           end
         end

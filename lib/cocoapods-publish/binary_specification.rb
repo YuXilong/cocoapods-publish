@@ -24,6 +24,7 @@ module Pod
         raise Informative, '精简 podspec 的产物缺少构建规格，请使用新版 packager 重新打包'
       end
       root = Specification.from_hash(snapshot)
+      macro_support = swift_macro_support(root)
       component = @manifest.fetch('component')
       unless root.name == component['name'] && names.include?(root.name)
         raise Informative, '产物与构建规格的组件名称不一致'
@@ -35,7 +36,9 @@ module Pod
         spec
       end
       specs.each do |spec|
-        if !spec.consumer(:ios).script_phases.empty? || spec.attributes_hash.key?('prepare_command')
+        phases = spec.consumer(:ios).script_phases
+        supported_phases = macro_support && phases == root.consumer(:ios).script_phases
+        if (!phases.empty? && !supported_phases) || spec.attributes_hash.key?('prepare_command')
           raise Informative, "#{spec.name} 含自定义脚本，需先明确二进制消费端行为"
         end
       end
@@ -95,6 +98,14 @@ module Pod
         @manifest.fetch('vendored_frameworks').map { |path| artifact_path(path) }
       resources = @manifest.fetch('resources').map { |resource| artifact_path(resource.fetch('path')) }
       result['resources'] = resources unless resources.empty?
+      if macro_support
+        result['preserve_paths'] = macro_support.fetch('files')
+        result['script_phases'] = root.consumer(:ios).script_phases
+        %w[pod_target_xcconfig user_target_xcconfig].each do |key|
+          result[key] ||= {}
+          result[key]['OTHER_SWIFT_FLAGS'] = macro_support.fetch('flags')
+        end
+      end
       result
     rescue KeyError => e
       raise Informative, "精简 podspec 的产物元数据不完整：#{e.message}"
@@ -113,6 +124,35 @@ module Pod
     end
 
     private
+
+    # 只接受已定义并完整打包的 BTLogger 宏契约，不放开其他组件的任意脚本。
+    def swift_macro_support(root)
+      support = @manifest['swift_macro_support']
+      return nil unless support
+
+      unless root.name == 'BTLogger' && support['module'] == 'BTLoggerMacroPlugin'
+        raise Informative, '不支持的 Swift 宏分发契约'
+      end
+      files = support.fetch('files').map { |path| artifact_path(path) }
+      required = %w[Package.swift Package.resolved scripts/build_macro.sh Sources/BTLoggerMacroPlugin/LoggerMacro.swift]
+      unless (required - files).empty?
+        raise Informative, 'BTLogger 宏支持文件不完整'
+      end
+      phases = root.consumer(:ios).script_phases
+      phase = phases.first || {}
+      unless phases.length == 1 && phase[:name] == 'Build BTLogger macro' &&
+             phase[:script] == '/bin/bash "${PODS_TARGET_SRCROOT}/scripts/build_macro.sh"' &&
+             phase[:execution_position].to_s == 'before_compile'
+        raise Informative, 'BTLogger 宏构建脚本不符合分发契约'
+      end
+      flags = root.consumer(:ios).pod_target_xcconfig['OTHER_SWIFT_FLAGS'].to_s
+      macro = flags.scan(/-load-plugin-executable\s+(?:"[^"]+"|'[^']+'|\S+)/).find do |flag|
+        flag.match?(/#BTLoggerMacroPlugin["']?\z/)
+      end
+      raise Informative, 'BTLogger 宏插件编译参数缺失' unless macro
+
+      { 'files' => files, 'flags' => macro }
+    end
 
     def artifact_path(path)
       unless path.is_a?(String) && !path.empty? && !path.start_with?('/') &&
