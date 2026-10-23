@@ -111,8 +111,9 @@ module Pod
       raise Informative, "精简 podspec 的产物元数据不完整：#{e.message}"
     end
 
-    def render(http_url)
-      data = attributes.merge('source' => { 'http' => http_url, 'type' => 'zip' })
+    def render(http_url, pod_name:)
+      # 发布名称来自源码规格；manifest 保留混淆后的模块和产物身份。
+      data = attributes.merge('name' => pod_name, 'source' => { 'http' => http_url, 'type' => 'zip' })
       <<~SPEC
         # Generated from the built artifact manifest.
         Pod::Spec.from_json(<<~'PODSPEC_JSON').tap do |s|

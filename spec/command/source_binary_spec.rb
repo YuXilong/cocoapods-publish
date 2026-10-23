@@ -164,7 +164,7 @@ describe Pod::BinarySpecification do
     generator = Pod::BinarySpecification.new(@manifest)
     previous = ENV['GIT_LAB_TOKEN']
     ENV['GIT_LAB_TOKEN'] = 'test-secret-never-serialize'
-    rendered = generator.render('https://example.com/Room.zip')
+    rendered = generator.render('https://example.com/Room.zip', pod_name: @spec.name)
     rendered.should.not.include('test-secret-never-serialize')
     Dir.mktmpdir('binary-spec-', File.dirname(__FILE__)) do |directory|
       path = File.join(directory, 'Room.podspec')
@@ -175,6 +175,35 @@ describe Pod::BinarySpecification do
     end
   ensure
     ENV['GIT_LAB_TOKEN'] = previous
+  end
+
+  %w[DRLDoraLogin DRLRegistrationModule].each do |artifact_name|
+    it "publishes the original pod name with the mixed artifact #{artifact_name}" do
+      manifest = JSON.parse(JSON.generate(@manifest).gsub('Room', artifact_name))
+      manifest['component']['version'] = '159.b101.DRL-CF'
+      original = Marshal.load(Marshal.dump(manifest))
+      Dir.mktmpdir('mixed-publish-', File.dirname(__FILE__)) do |directory|
+        path = File.join(directory, 'BTDoraLogin.podspec')
+        command = Pod::Command::Publish.allocate
+        command.instance_variable_set(:@spec, Pod::Spec.new { |s| s.name = 'BTDoraLogin' })
+        command.instance_variable_set(:@new_spec_name, artifact_name)
+        command.instance_variable_set(:@new_version, '159.b101.DRL-CF')
+        command.instance_variable_set(:@push_podspec_file, path)
+        command.stubs(:get_project_id).returns(42)
+
+        command.send(:write_binary_specification, 'repository/files/159-beta', manifest)
+
+        published = command.instance_variable_get(:@push_spec)
+        published.name.should == 'BTDoraLogin'
+        published.version.to_s.should == '159.b101.DRL-CF'
+        published.module_name.should == artifact_name
+        published.consumer(:ios).vendored_frameworks.should == ["#{artifact_name}.xcframework", 'Vendor.xcframework']
+        published.consumer(:ios).resources.should == ["#{artifact_name}.bundle"]
+        published.source[:http].should.include("%2F#{artifact_name}-159.b101.DRL-CF.zip")
+        published.attributes_hash['dependencies'].should == { 'RootDep' => ['~> 2.0'], 'CoreDep' => ['3'] }
+        manifest.should == original
+      end
+    end
   end
 
   it 'rejects identity mismatches and missing build metadata' do

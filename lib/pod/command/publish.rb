@@ -501,7 +501,7 @@ module Pod
 
       def write_binary_specification(zip_path, manifest)
         url = "https://#{ENV['GIT_LAB_HOST']}/api/v4/projects/#{get_project_id}/#{zip_path}%2F#{@new_spec_name}-#{@new_version}.zip/raw?ref=main"
-        File.write(@push_podspec_file, BinarySpecification.new(manifest).render(url))
+        File.write(@push_podspec_file, BinarySpecification.new(manifest).render(url, pod_name: @spec.name))
         @push_spec = Specification.from_file(@push_podspec_file)
       end
 
