@@ -54,6 +54,10 @@ s.dependency 'ReerCodable', '~> 1.8'
 
 项目仍使用现有的 `cocoapods-publish` 插件及 Specs 源。宏路径、版本和下载逻辑来自已安装的 ReerCodable 规格，插件不固定版本、不重复下载；未依赖 ReerCodable 的 Pod 和不含预编译宏配置的旧规格不受影响。当前预编译宏的 ARM Mac、Xcode 版本限制由 ReerCodable 规格决定。
 
+`pod install` 在生成工程前准备 ReerCodable 宏，下载或校验失败直接使安装失败，恢复网络后重新执行 `pod install` 即可。全局缓存位于 `~/Library/Caches/cocoapods-publish/SwiftMacros/arm64/ReerCodable/<组件版本>/<Xcode build号>/`，同一用户的不同工程共用，清理 DerivedData 不会删除它。并发安装通过文件锁共享同一份下载。
+
+构建阶段从全局缓存复制到原有宏加载路径；更换 Xcode 或缓存被清理时自动补下载，使用规格原有的校验和及兼容版本检查。需要使用指定 Xcode 安装时，设置标准的 `DEVELOPER_DIR` 后运行 `pod install`。BTLogger 的本地宏构建流程不变。
+
 ### iOS 最低版本
 
 在解析依赖前，将 Podfile 中的 iOS 最低版本统一提升到 `15.1` 下限；`Podfile.local` 的覆盖先应用，声明更高版本的 target 保留原值，其他平台不调整。生成 Pods 工程时使用同一下限，不再只依赖 `post_install` 修正。packager 的普通构建和函数混淆缓存预热共用此安装入口。

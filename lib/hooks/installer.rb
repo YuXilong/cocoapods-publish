@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require 'cocoapods-publish/reer_macro_preparation'
 
 module Pod
   class Installer
@@ -6,6 +7,12 @@ module Pod
     alias origin_initialize initialize
     alias origin_integrate_user_project integrate_user_project
     alias origin_create_analyzer create_analyzer
+    alias origin_download_dependencies download_dependencies
+
+    def download_dependencies
+      origin_download_dependencies
+      Publish::ReerMacroPreparation.prepare(self)
+    end
 
     attr_accessor :precheck_dependencies
 

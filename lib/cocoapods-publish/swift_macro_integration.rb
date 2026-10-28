@@ -1,4 +1,5 @@
 # Created by yuxilong on 2026/10/15.
+require 'cocoapods-publish/reer_macro_preparation'
 module Pod
   module Publish
     module SwiftMacroIntegration
@@ -10,6 +11,7 @@ module Pod
         return unless results
 
         results.pod_target_installation_results.each_value do |result|
+          ReerMacroPreparation.integrate(result)
           target = result.target
           targets = { result.native_target => nil }.merge(result.non_library_specs_by_native_target)
           targets.each do |native_target, spec|
