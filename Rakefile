@@ -8,7 +8,7 @@ desc 'Runs all the specs'
 task :specs do
   sh "bundle exec bacon #{specs('**')}"
   ruby 'test/reer_macro_cache_test.rb'
+  ruby 'test/btlogger_macro_cache_test.rb'
 end
 
 task :default => :specs
-

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 require 'cocoapods-publish/reer_macro_preparation'
+require 'cocoapods-publish/btlogger_macro_preparation'
 
 module Pod
   class Installer
@@ -12,6 +13,7 @@ module Pod
     def download_dependencies
       origin_download_dependencies
       Publish::ReerMacroPreparation.prepare(self)
+      Publish::BTLoggerMacroPreparation.prepare(self)
     end
 
     attr_accessor :precheck_dependencies

@@ -56,7 +56,11 @@ s.dependency 'ReerCodable', '~> 1.8'
 
 `pod install` 在生成工程前准备 ReerCodable 宏，下载或校验失败直接使安装失败，恢复网络后重新执行 `pod install` 即可。全局缓存位于 `~/Library/Caches/cocoapods-publish/SwiftMacros/arm64/ReerCodable/<组件版本>/<Xcode build号>/`，同一用户的不同工程共用，清理 DerivedData 不会删除它。并发安装通过文件锁共享同一份下载。
 
-构建阶段从全局缓存复制到原有宏加载路径；更换 Xcode 或缓存被清理时自动补下载，使用规格原有的校验和及兼容版本检查。需要使用指定 Xcode 安装时，设置标准的 `DEVELOPER_DIR` 后运行 `pod install`。BTLogger 的本地宏构建流程不变。
+构建阶段从全局缓存复制到原有宏加载路径；更换 Xcode 或缓存被清理时自动补下载，使用规格原有的校验和及兼容版本检查。需要使用指定 Xcode 安装时，设置标准的 `DEVELOPER_DIR` 后运行 `pod install`。
+
+BTLogger（带 `Build BTLogger macro` 的源码或二进制规格）也会在 `pod install` 阶段下载 SwiftPM 依赖并构建宿主宏，失败直接终止安装，修复网络后重新运行 `pod install` 即可。无需添加 Podfile 配置。
+
+BTLogger 产物保存在 `~/Library/Caches/cocoapods-publish/SwiftMacros/arm64/BTLogger/<Xcode build>/<源码指纹>/`，不同工程、Debug/Release、设备/模拟器复用同一个 Mac 宏。指纹包含 Package.swift、Package.resolved、Sources、Tests 和构建脚本；本地 `:path` 宏源码改变后自动重建。并发准备会加锁，只有完整构建成功才发布缓存。Xcode 编译时复制到规格原有路径；更换 Xcode、源码改变或缓存被清理时会重新准备。首次安装需要访问 GitHub，耗时包含 SwiftSyntax 和宏的构建。
 
 ### iOS 最低版本
 
