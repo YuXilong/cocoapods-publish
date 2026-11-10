@@ -43,7 +43,8 @@ module Pod
         end
         if name.start_with?('BT') &&
            !requirements.last.is_a?(Hash) &&
-           (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name))
+           (explicit_legacy_requirement?(requirements) || legacy_swift_framework?(base_name) ||
+             ((requirements.empty? || requirements == [[]]) && get_min_dependency_version(base_name)))
           if name.include?('/')
             unless FW_MIXUP_SUPPORT.filter { |prefix| name == "#{base_name}/#{prefix}" }.empty?
               requirements = [genrate_requirements(base_name, requirements)]
@@ -88,10 +89,11 @@ module Pod
     end
 
     def genrate_requirements(name, requirements)
-      return requirements if requirements.empty?
+      configured_version = get_min_dependency_version(name)
+      return requirements if requirements.empty? && configured_version.nil?
 
       # 获取当前的版本号
-      version = requirements[0]
+      version = requirements.empty? ? [] : requirements[0]
 
       # 其它地方已指定版本号，本次不自动指定版本号，比如在podspec中依赖通常不指定版本号 在podfile中会指定对应的版本号
       if version.is_a?(Array) && Dependency.specified_framework_versions.keys.include?(name)
@@ -108,8 +110,8 @@ module Pod
 
       return version if version.is_a?(Array)
 
-      # 纯数字版本由 CocoaPods 按平台和完整依赖图选择，不因历史 Swift 产物强制锁定最新版。
-      return [] if requirements == [[]] && version.to_s.match?(/\A\d+(?:\.\d+)*\z/)
+      # 未配置最低版本时，纯数字版本仍由 CocoaPods 按平台和完整依赖图选择。
+      return [] if configured_version.nil? && requirements == [[]] && version.to_s.match?(/\A\d+(?:\.\d+)*\z/)
 
       version = compatible_framework_version(name, version.to_s)
 

@@ -113,6 +113,30 @@ module Pod
       @dependency.genrate_requirements(fw, ['100']).should.equal '100'
     end
 
+    it 'honors configured beta and stable versions without matching legacy compiler artifacts' do
+      versions = { 'BTConfiguredBetaVersion' => '228.b105', 'BTConfiguredStableVersion' => '104' }
+      File.write(File.join(@tmp_dir, 'BTLiveRoom.podspec'), <<~PODSPEC)
+        MIN_SWIFT_DEPENDENCY_VERSION = [
+          #{versions.map { |name, version| "'#{name}' => '#{version}'" }.join(",\n  ")}
+        ]
+      PODSPEC
+      Dependency.register_local_path('BTLiveRoom', @tmp_dir)
+
+      versions.each do |fw, version|
+        write_framework_podspec(fw, version, swift_version: '0.0.0')
+        write_framework_podspec(fw, version)
+        write_framework_podspec(fw, '999')
+
+        @dependency.legacy_swift_framework?(fw).should == false
+        Dependency.new(fw, []).requirement.as_list.should == ["= #{version}"]
+        Dependency.new(fw).requirement.as_list.should == ["= #{version}"]
+        Dependency.new("#{fw}/DRL", []).requirement.as_list.should == ["= #{version}"]
+        Dependency.new("#{fw}/DRL", Version.new('999')).requirement.as_list.should == ['= 999']
+        Dependency.new(fw, ['999']).requirement.as_list.should == ['= 999']
+        Dependency.new(fw, '999').requirement.as_list.should == ['= 999']
+      end
+    end
+
     it 'does not pin an unversioned dependency to a stable release because legacy artifacts exist' do
       fw = 'BTDeploymentTargetRegression'
       write_framework_podspec(fw, '130', swift_version: Dependency::SWIFT_VERSION)
