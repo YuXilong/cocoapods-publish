@@ -1,5 +1,5 @@
 module Pod
   module Publish
-    VERSION = '2.9.10'.freeze
+    VERSION = '2.9.11'.freeze
   end
 end
