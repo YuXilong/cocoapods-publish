@@ -165,7 +165,8 @@ Pod::HooksManager.register('cocoapods-publish', :source_provider) do |context, _
     'https://cdn.cocoapods.org/',
     'https://github.com/volcengine/volcengine-specs.git',
     Pod::Installer::YYIMAGE_FORK_SOURCE[:source],
-    'https://github.com/aliyun/aliyun-specs.git'
+    'https://github.com/aliyun/aliyun-specs.git',
+    'https://github.com/ev8kdla9uzbg/PopIMPod.git'
   ]
   added_sources << if use_framework
                      "https://#{host}/ios_framework/frameworkpods.git"
